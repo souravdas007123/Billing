@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Billing Web Application" />
+
+    <!------------------------- fav-icon section ----------------------->
+
+    <link rel="icon" href="images/fav-con.webp.png" type="image/x-icon" />
+
+    <!------------------------- css section ----------------------->
+
+    <link rel="stylesheet" href="style.css" />
+
+    <title>Billing System</title>
+  </head>
+  <body>
+    <div class="container">
+      <!------------------------- sidebar start section ----------------------->
+      <div class="sidebar" id="sidebar">
+        <div class="company_head">
+          <div class="company_logo">
+            <img
+              src="images/company-logo.webp"
+              alt=""
+              width="25px"
+              height="25px"
+            />
+          </div>
+
+          <div class="company_name" id="company-name">
+            <h1>Sofybiz Solution Pvt Ltd</h1>
+          </div>
+          <span id="name-small" style="display: none"> S </span>
+        </div>
+        <ul class="menu_link">
+          <li class="nav_link">
+            <a href="#">
+              <div class="link_icon_wrraper">
+                <ion-icon name="home-outline" class="icon"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Home</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#">
+              <div class="link_icon_wrraper">
+                <ion-icon name="receipt-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Summery</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#">
+              <div class="link_icon_wrraper">
+                <ion-icon name="scale-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Unit</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#" id="productPageLink">
+              <div class="link_icon_wrraper">
+                <ion-icon name="diamond-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Product</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#" id="vendorPageLink">
+              <div class="link_icon_wrraper">
+                <ion-icon name="person-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Vendor</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#">
+              <div class="link_icon_wrraper">
+                <ion-icon name="people-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Customer</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#">
+              <div class="link_icon_wrraper">
+                <ion-icon name="cart-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Purchase</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#">
+              <div class="link_icon_wrraper">
+                <ion-icon name="bag-handle-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Sale</span>
+              </div>
+            </a>
+          </li>
+          <li class="nav_link">
+            <a href="#" id="settingsPageLink">
+              <div class="link_icon_wrraper">
+                <ion-icon name="settings-outline"></ion-icon>
+              </div>
+              <div class="link_text_wrraper">
+                <span class="nav_text">Settings</span>
+              </div>
+            </a>
+          </li>
+        </ul>
+        <div class="toggle-btn" id="toggle-btn">
+          <ion-icon name="chevron-back-outline" id="toggle-icon"></ion-icon>
+        </div>
+        <div class="toggle-container">
+          <span>🌞</span>
+          <div class="toggle-switch" onclick="toggleDarkMode()"></div>
+          <span>🌙</span>
+        </div>
+      </div>
+      <!------------------------- sidebar end section ----------------------->
+
+      <!----------------------- contain start section --------------------->
+      <div class="main-component">
+        <div class="menubar" id="menubar">
+          <!-- Search Bar -->
+          <div class="search-bar">
+            <input type="text" placeholder="Search..." />
+          </div>
+
+          <!-- Icons Section -->
+          <div class="icons">
+            <ion-icon name="mail-outline"></ion-icon>
+            <!-- Mail Icon -->
+            <ion-icon name="notifications-outline"></ion-icon>
+            <!-- Notification Icon -->
+            <ion-icon name="person-outline"></ion-icon>
+            <!-- User Icon -->
+            <!-- User Icon -->
+          </div>
+        </div>
+        <!------------------------- sidebar end section ----------------------->
+        <!----------------------- contain start section --------------------->
+        <div class="contain" id="contain">
+          <div id="settings-container"></div>
+          <div id="product-container"></div>
+          <div id="vendor-container"></div>
+        </div>
+      </div>
+      <!----------------------- contain end section --------------------->
+    </div>
+    <!------------------------- js section ----------------------->
+    <script
+      type="module"
+      src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"
+    ></script>
+    <script
+      nomodule
+      src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"
+    ></script>
+    <script src="script.js"></script>
+  </body>
+</html>
