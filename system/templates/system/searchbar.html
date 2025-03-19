@@ -1,5 +1,26 @@
-{% extends "base_structure.html" %}
+{% load static %}
 
-{% block searchbar %}
+  <div class="menubar" id="menubar">
+    <!-- Search Bar -->
+    <div class="search-bar">
+      <input type="text" placeholder="Search..." />
+    </div>
 
-{% endblock searchbar %}
+    <!-- Icons Section -->
+    <div class="icons">
+      <ion-icon name="mail-outline"></ion-icon>
+      <!-- Mail Icon -->
+      <ion-icon name="notifications-outline"></ion-icon>
+      <!-- Notification Icon -->
+      <ion-icon name="person-outline"></ion-icon>
+      <!-- User Icon -->
+      <!-- User Icon -->
+    </div>
+  </div>
+
+  <div class="contain" id="contain">
+    <div id="settings-container"></div>
+    <div id="product-container"></div>
+    <div id="vendor-container"></div>
+  </div>
+

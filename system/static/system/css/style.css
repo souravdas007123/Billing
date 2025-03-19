@@ -1,0 +1,367 @@
+/*************************** font cdn ************************/
+
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap');
+
+/*************************** colour part ************************/
+:root {
+  --body: #f4f8fb;
+  --theame1: #eaebed;
+  --theame2: #ffffff;
+  --theame3: #b6b5ea;
+  --theame4: #3f4d68;
+  --heading: #5a54b4;
+  --paragraph: #121212;
+  --navbar_link: #000000;
+  --navbar_heading: #ffffff;
+  --sidebar: #ffffff;
+  --contain: #ffffff;
+  --button: #2ebdb0;
+  --hover: #2ebdb0;
+}
+
+/*********************** root part *********************/
+* {
+  font-family: "Roboto", sans-serif;
+  font-style: normal;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+/*********************** basic part *********************/
+html {
+  scroll-behavior: smooth;
+  font-size: 62.5%;
+  /* font-size: clamp(1.8rem, calc(7vw + 1rem), 4rem); */
+}
+
+body {
+  background-color: var(--body);
+}
+
+.container {
+  width: 100%;
+  height: 100dvh;
+  display: flex;
+}
+
+.sidebar_area{
+  width: 15%;
+  height: 100%;
+  /* padding: 1.5rem 0rem; */
+  background-color: var(--sidebar);
+  color: white;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.contain_area{
+  width: 85%;
+  height: 100%;
+  /* padding: 1.5rem 0rem; */
+  background-color: var(--theame1);
+  display: flex;
+  flex-direction: column;
+}
+.main-component{
+  flex-grow: 1; /* Automatically takes the remaining space */
+  background: var(--); /* Just for visibility */
+  /* height: 8%; */
+  transition: margin-left 0.3s ease-in-out;
+  display: flex;
+  flex-direction: column;
+}
+.menubar {
+  background: var(--sidebar); /* Just for visibility */
+  height: 10%;
+  width: 100%;
+  transition: margin-left 0.3s ease-in-out;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 2rem 4rem;
+  color: rgb(0, 0, 0);
+}
+
+section {
+  padding: min(5rem, 8%);
+}
+
+.section_heading {
+  padding-bottom: 2rem;
+}
+
+.section_paragraph {
+  letter-spacing: 0.5rem;
+  text-transform: uppercase;
+  color: var(--theame3);
+  font-weight: 600;
+}
+
+.text_bold {
+  font-weight: 700;
+}
+
+.img_fit {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/*********************** font size part *********************/
+
+h1 {
+  font-size: 1.6rem;
+  /* font-size: clamp(1.5rem, calc(7vw + 1rem), 3rem); */
+  font-weight: 700;
+}
+
+h2 {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+h4 {
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+p {
+  font-size: 1.4rem;
+  font-weight: 400;
+}
+
+li {
+  font-size: 1.4rem;
+  font-weight: 300;
+}
+
+a {
+  font-size: 1.4rem;
+  font-weight: 500;
+  letter-spacing: .1rem;
+}
+/*********************** sidebar part *********************/
+.sidebar{
+  height: 100%;
+}
+.sidebar ul {
+  list-style: none;
+  /* background-color: aquamarine; */
+  padding: 2rem 0;
+}
+
+.sidebar ul li a {
+  color: var(--navbar_link);
+  display: block;
+  padding: 1.5rem 1.6rem;
+  transition: background-color 0.3s ease;
+  display: flex;
+}
+
+.link_icon_wrraper .link_text_wrraper {
+  width: 50%;
+
+}
+.link_icon_wrraper {
+  /* background-color: #3f6844; */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 1rem;
+}
+
+.link_text_wrraper {
+  /* background-color: #bd541c; */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  
+}
+.sidebar ul li a:hover {
+  background-color: var(--theame1);
+}
+
+.nav_link a ion-icon {
+  padding: 0 1rem;
+}
+
+.company_head {
+  display: flex;
+  justify-content: space-evenly;
+  align-items: center;
+  background-color: var(--heading);
+  padding: 2rem 0rem;
+  height: 10%;
+}
+.company_head span{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 3rem;
+}
+.company_logo img {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+.company_name h1 {
+  color: var(--navbar_heading);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.collapsed {
+  width: 25%;
+}
+.menu_link .nav_link a {
+  display: flex;
+  align-items: center;
+}
+.collapsed .nav_text{
+  display: none;
+}
+.sidebar.collapsed + .main-component {
+  margin-left: 0; /* Keep it in place */
+}
+.sidebar.collapsed .toggle-switch {
+  width: 45%;
+  overflow: hidden;
+}
+.sidebar.collapsed .toggle-container{
+  gap: 3.5rem;
+}
+.collapsed .menu_link .nav_link a{
+  justify-content: center;
+}
+.toggle-btn {
+  position: absolute;
+  right: -1rem;
+  top: 10%;
+  font-size: 1.5rem;
+  font-weight: 500;
+  transform: translateY(-50%);
+  background: #fff;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: blueviolet;
+  box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+}
+.rotated {
+  transform: rotate(180deg);
+}
+.dark-mode {
+  background: #121212;
+  color: #ffffff;
+}
+.toggle-container {
+  display: flex;
+  align-items: center;
+  justify-content:center;
+  gap: 4.5rem;
+  padding: 1rem 2rem;
+  /* background-color: #2ebdb0; */
+}
+.toggle-switch {
+  position: absolute;
+  width: 3.2rem;
+  height: 1.6rem;
+  background: #ccc;
+  border-radius: 1rem;
+  cursor: pointer;
+}
+.toggle-switch::before {
+  content: "";
+  position: absolute;
+  width: 1.4rem;
+  height: 1.4rem;
+  background: white;
+  border-radius: 50%;
+  top: .1rem;
+  left: .2rem;
+  transition: transform 0.3s;
+}
+.dark-mode .toggle-switch {
+  background: #666;
+}
+.dark-mode .toggle-switch::before {
+  transform: translateX(1.65rem);
+}
+.dark-mode .sidebar{
+  background: #222;
+}
+.dark-mode .menubar{
+  background: #222;
+}
+.dark-mode .setting-sidebar{
+  background: #222;
+  color: #ffffff;
+}
+.dark-mode .settings-content{
+  background: #222;
+}
+.dark-mode .contain{
+  background: #2c2c2c;
+}
+.dark-mode .product-container{
+  background: #222;
+}
+.dark-mode .product-card{
+  background: #2c2c2c;
+}
+.dark-mode .product-grid{
+  background: #222;
+}
+.dark-mode table thead th{
+  background: #2c2c2c;
+}
+.dark-mode .vendor-box{
+  background: #222;
+}
+.dark-mode .vendor-container{
+  background: #222;
+}
+.dark-mode .section{
+  background: #222;
+}
+.dark-mode .navbar a{
+  color: #ffffff;
+}
+.dark-mode .sidebar ul li a{
+  color: #ffffff;
+} 
+.dark-mode .sidebar ul li a:hover {
+  color: #ffffff;
+  background: #2c2c2c;
+}
+.dark-mode .icons ion-icon {
+  color: #fff;
+} 
+/******************** searchbar and user section *******************/
+
+.search-bar input {
+  padding: .8rem;
+  width: 20rem;
+  border: none;
+  border-radius: .4rem;
+  box-shadow: 2px 2px 2px 1px rgba(0, 0, 0, 0.2);
+}
+.icons {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+.icons ion-icon {
+  font-size: 2rem;
+  cursor: pointer;
+}
