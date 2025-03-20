@@ -15,3 +15,12 @@ def vendor(request):
 
 def customer(request):
     return render(request,'system/customer.html')
+
+def purchase(request):
+    return render(request,'system/purchase.html')
+
+def sale(request):
+    return render(request,'system/sale.html')
+
+def setting(request):
+    return render(request,'system/setting.html')
