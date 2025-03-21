@@ -4,6 +4,13 @@
 
 {% block contain_body %}
 
+<div class="contain_wrraper">
+    <div class="contain_box">
+       <div class="contain_btn">{% block containbtn %}{% endblock containbtn %}</div>
+       <div class="contain_data">{% block containdata %}{% endblock containdata %}</div>
+    </div>
+</div>
+
 {% endblock contain_body %}
 
 {% endblock contain %}
