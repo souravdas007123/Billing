@@ -21,6 +21,10 @@ urlpatterns = [
     path('saledata/', views.sale_data,name='saledata'),
     path('saleadd/', views.sale_add,name='saleadd'),
     path('setting/', views.setting,name='setting'),
+    path('settinguser/', views.setting_user,name='settinguser'),
+    path('settingsecurity/', views.setting_security,name='settingsecurity'),
+    path('settingpreference/', views.setting_preference,name='settingpreference'),
+
 
 
 

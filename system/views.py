@@ -59,4 +59,13 @@ def sale_add(request):
     return render(request,'system/sale_add.html')
 
 def setting(request):
-    return render(request,'system/setting.html')
+    return render(request,'system/setting_user.html')
+
+def setting_user(request):
+    return render(request,'system/setting_user.html')
+
+def setting_security(request):
+    return render(request,'system/setting_security.html')
+
+def setting_preference(request):
+    return render(request,'system/setting_preference.html')
