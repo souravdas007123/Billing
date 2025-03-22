@@ -403,6 +403,8 @@ a {
  background-color: var(--heading);
  /* border-bottom: 1px solid var(--theame3); */
 }
-/* .contain_data{
+.contain_data{
   background-color: #b6b5ea;
-} */
+  padding: 25px;
+  text-align: center;
+}
