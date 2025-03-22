@@ -1,5 +1,16 @@
 {% extends "system/contain_structure.html" %}
 
-{% block contain_body %}
-<h1>product</h1>
-{% endblock contain_body %}
+{% block containbtn %}
+
+<div class="btn_link">
+    <a aria-label="test" href="{% url 'customerdata' %}" title="test">Views</a>
+</div>
+<div class="btn_link">
+    <a aria-label="test" href={% url 'customeradd' %} title="test">Add</a>
+</div>
+
+{% endblock containbtn %}
+
+{% block containdata %}
+sale
+{% endblock containdata %}

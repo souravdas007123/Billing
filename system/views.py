@@ -16,6 +16,12 @@ def vendor(request):
 def customer(request):
     return render(request,'system/customer.html')
 
+def customer_data(request):
+    return render(request,'system/customer_data.html')
+
+def customer_add(request):
+    return render(request,'system/customer_add.html')
+
 def purchase(request):
     return render(request,'system/purchase.html')
 
