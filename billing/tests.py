@@ -260,6 +260,38 @@ class BillingViewTests(TestCase):
         self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"]["no"], "T-1")
 
 
+    def test_dashboard_counts_submitted_bills_only(self):
+        self.save(payload(invoice_no="T-1"))                      # 2000 + 360 GST = 2360, October 2026
+        self.save(payload(party_name="Beta", submitted=False))    # a draft: not in any figure
+        r = self.client.get(reverse("dashboard"))
+        self.assertEqual(r.status_code, 200)
+        totals = r.context["report"]["totals"]
+        self.assertEqual((totals["bills"], totals["taxable"], totals["gst"], totals["total"]), (1, 2000, 360, 2360))
+        self.assertEqual((r.context["draft_count"], r.context["fy"]), (1, 2026))
+        self.assertContains(r, "23,60.00".replace("23,60", "2,360"))
+
+    def test_dashboard_year_filter_and_bad_values(self):
+        self.save(payload(invoice_no="T-1"))
+        self.assertEqual(self.client.get(reverse("dashboard"), {"fy": "2025"}).context["report"]["totals"]["bills"], 0)
+        self.assertEqual(self.client.get(reverse("dashboard"), {"fy": "abc"}).status_code, 200)
+        self.assertEqual(self.client.get(reverse("dashboard"), {"fy": "99999"}).context["fy"], 2026)
+
+    def test_dashboard_csv_export(self):
+        self.save(payload(invoice_no="T-1"))
+        r = self.client.get(reverse("dashboard_export"), {"fy": "2026"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("text/csv", r["Content-Type"])
+        body = r.content.decode("utf-8-sig").splitlines()
+        self.assertEqual(body[0].split(",")[0], "Month")
+        self.assertEqual(len(body), 14)  # header + 12 months + total
+        self.assertTrue(body[-1].startswith("Total,1,2000"))
+
+    def test_dashboard_needs_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 302)
+        self.assertEqual(self.client.get(reverse("dashboard_export")).status_code, 302)
+
+
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):
         self.assertEqual(Invoice.next_number("INV", datetime.date(2026, 10, 12)), "INV/26-27/0001")

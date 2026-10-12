@@ -97,6 +97,11 @@
   .badge.ok { color: var(--ok); border-color: rgba(130, 208, 166, .4); background: rgba(130, 208, 166, .08); }
   .badge.wait { color: var(--wait); border-color: rgba(232, 195, 106, .45); background: rgba(232, 195, 106, .08); }
 
+  @media (max-width: 720px) {
+    header.top { flex-wrap: wrap; height: auto; padding: 6px 12px; }
+    header.top .sp { display: none; }
+    main { padding: 14px 12px; }
+  }
   @media print {
     header.top { display: none; }
     body { background: #fff; color: #000; }
@@ -111,6 +116,7 @@
   <a class="brand" href="{% url 'invoice_new' %}">Billing</a>
   <nav>
     <a href="{% url 'invoice_new' %}"{% if page == 'invoice_new' or page == 'invoice_edit' %} class="active"{% endif %}>New invoice</a>
+    <a href="{% url 'dashboard' %}"{% if page == 'dashboard' %} class="active"{% endif %}>Dashboard</a>
     <a href="{% url 'invoice_list' %}"{% if page == 'invoice_list' or page == 'invoice_print' %} class="active"{% endif %}>All invoices</a>
     <a href="{% url 'admin:index' %}">Admin</a>
   </nav>

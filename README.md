@@ -47,6 +47,10 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
   becomes today if it was in the past. A submitted bill cannot go back to a draft, and a draft can be edited freely or
   deleted without touching the numbering. Bills numbered before this feature existed are treated as already submitted
   (run `python manage.py migrate`).
+- **Dashboard**: the *Dashboard* page shows, for the chosen financial year (April to March), the invoice total, taxable
+  value and GST (CGST / SGST / IGST) month by month, a monthly chart, the top parties, a GST rate-wise table, same-state
+  vs other-state sales, and how many bills are still not submitted. Only submitted bills are counted, by invoice date.
+  **Download CSV** gives the monthly table for Excel / your CA.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

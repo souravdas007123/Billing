@@ -1,3 +1,4 @@
+import csv
 import datetime
 import json
 import re
@@ -7,7 +8,7 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import HttpResponseRedirect, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +16,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2
+from .reports import build_report, fy_label, fy_start_year
 from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
 
 MAX_ROWS = 500
@@ -466,3 +468,55 @@ def invoice_print(request, pk):
             "inclusive": invoice.price_mode == "INCL",
         },
     )
+
+
+def _report_for_year(request):
+    """The sales report of the financial year chosen with ?fy=2026 (default: the current one). Submitted bills only."""
+    today = timezone.localdate()
+    try:
+        start = int(request.GET.get("fy", ""))
+        if not 2000 <= start <= 2100:
+            raise ValueError
+    except ValueError:
+        start = fy_start_year(today)
+    begin, end = datetime.date(start, 4, 1), datetime.date(start + 1, 3, 31)
+    issued = Invoice.objects.filter(invoice_no__isnull=False, date__gte=begin, date__lte=end)
+    invoices = list(issued.values("date", "party_name", "is_intra_state", "taxable_value", "cgst", "sgst", "igst", "round_off", "total"))
+    items = list(
+        InvoiceItem.objects.filter(invoice__in=issued).values("gst_rate", "taxable", "gst_amount")
+    )
+    return start, today, build_report(invoices, items, start, today)
+
+
+@login_required
+def dashboard(request):
+    start, today, report = _report_for_year(request)
+    years = {fy_start_year(d) for d in Invoice.objects.filter(invoice_no__isnull=False).dates("date", "month")}
+    years |= {fy_start_year(today), start}
+    drafts = Invoice.objects.filter(invoice_no__isnull=True)
+    return render(
+        request,
+        "billing/dashboard.html",
+        {
+            "report": report,
+            "fy": start,
+            "fy_label": fy_label(start),
+            "fy_options": [{"value": y, "label": fy_label(y)} for y in sorted(years, reverse=True)],
+            "draft_count": drafts.count(),
+            "draft_total": sum((d for d in drafts.values_list("total", flat=True)), Decimal("0.00")),
+        },
+    )
+
+
+@login_required
+def dashboard_export(request):
+    """Monthly summary as a CSV file (opens in Excel) - handy for the CA / GST return."""
+    start, today, report = _report_for_year(request)
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="sales-summary-FY{fy_label(start)}.csv"'
+    response.write("\ufeff")  # so Excel reads the file as UTF-8
+    w = csv.writer(response)
+    w.writerow(["Month", "Bills", "Taxable value", "CGST", "SGST", "IGST", "Total GST", "Round off", "Invoice total"])
+    for m in report["months"] + [report["totals"]]:
+        w.writerow([m["label"], m["bills"], m["taxable"], m["cgst"], m["sgst"], m["igst"], m["gst"], m["round_off"], m["total"]])
+    return response

@@ -1,0 +1,118 @@
+{% extends "billing/base.html" %}
+{% load billing_extras %}
+{% block title %}Dashboard{% endblock %}
+{% block head %}
+<style>
+  .dash-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .dash-head h2 { margin:0; }
+  .dash-head .sp { flex:1; }
+  .dash-head select { width:auto; margin:0; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px; margin-bottom:16px; }
+  .tile { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; }
+  .tile .k { font-size:12px; color:var(--muted); }
+  .tile .v { font-size:24px; font-weight:650; margin-top:4px; font-variant-numeric:tabular-nums; }
+  .tile .s { font-size:12px; color:var(--muted); margin-top:2px; }
+  .grid2 { display:grid; grid-template-columns:2fr 1fr; gap:16px; margin-bottom:16px; }
+  .grid2.even { grid-template-columns:1fr 1fr; }
+  .grid2 > * { min-width:0; }
+  @media (max-width:900px) { .grid2, .grid2.even { grid-template-columns:1fr; } }
+  .chart { display:flex; align-items:flex-end; gap:8px; height:190px; padding-top:8px; }
+  .chart .col { flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; height:100%; min-width:0; }
+  .chart .bar { width:100%; max-width:34px; background:var(--accent); border-radius:4px 4px 0 0; min-height:2px; }
+  .chart .col.zero .bar { background:var(--line); }
+  .chart .col.future .bar { background:var(--line-soft); }
+  .chart .lbl { font-size:11px; color:var(--muted); margin-top:6px; }
+  .chart .amt { font-size:10px; color:var(--muted); margin-bottom:3px; white-space:nowrap; }
+  .tbl-wrap { overflow-x:auto; }
+  tr.future td { color:var(--muted); }
+  tr.total td { font-weight:700; border-top:2px solid var(--line); }
+  td, th { padding:7px 8px; }
+  .share { display:flex; align-items:center; gap:8px; }
+  .share .track { flex:1; height:6px; background:var(--line-soft); border-radius:3px; overflow:hidden; }
+  .share .fill { height:100%; background:var(--accent); }
+  .note { font-size:12px; color:var(--muted); margin-top:10px; }
+</style>
+{% endblock %}
+{% block content %}
+<div class="dash-head">
+  <h2>Sales dashboard</h2>
+  <form method="get" id="fyform">
+    <select name="fy" aria-label="Financial year" onchange="this.form.submit()">
+      {% for o in fy_options %}<option value="{{ o.value }}"{% if o.value == fy %} selected{% endif %}>FY {{ o.label }}</option>{% endfor %}
+    </select>
+  </form>
+  <span class="sp"></span>
+  <a class="btn" href="{% url 'dashboard_export' %}?fy={{ fy }}">Download CSV</a>
+</div>
+
+<div class="tiles">
+  <div class="tile"><div class="k">Invoice total</div><div class="v">&#8377; {{ report.totals.total|inr }}</div><div class="s">{{ report.totals.bills }} bill{{ report.totals.bills|pluralize }} in FY {{ fy_label }}</div></div>
+  <div class="tile"><div class="k">Taxable value</div><div class="v">&#8377; {{ report.totals.taxable|inr }}</div><div class="s">Average bill &#8377; {{ report.average_bill|inr }}</div></div>
+  <div class="tile"><div class="k">GST collected</div><div class="v">&#8377; {{ report.totals.gst|inr }}</div>
+    <div class="s">CGST {{ report.totals.cgst|inr }} &middot; SGST {{ report.totals.sgst|inr }} &middot; IGST {{ report.totals.igst|inr }}</div></div>
+  <div class="tile"><div class="k">Not submitted yet</div><div class="v">{{ draft_count }}</div><div class="s">Worth &#8377; {{ draft_total|inr }} &middot; <a href="{% url 'invoice_list' %}?status=pending">view</a></div></div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h3>Monthly invoice total</h3>
+    <div class="chart" role="img" aria-label="Bar chart of the invoice total for each month of FY {{ fy_label }}">
+      {% for m in report.months %}
+      <div class="col{% if not m.total %} zero{% endif %}{% if m.is_future %} future{% endif %}" title="{{ m.label }}: &#8377; {{ m.total|inr }} ({{ m.bills }} bill{{ m.bills|pluralize }})">
+        <div class="bar" style="height:{{ m.bar_pct|floatformat:1 }}%"></div>
+        <div class="lbl">{{ m.label|slice:":3" }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="note">{% if report.best_month %}Best month: {{ report.best_month }}. {% endif %}Hover a bar for the exact amount. Only submitted bills are counted, by invoice date.</div>
+  </div>
+  <div class="card">
+    <h3>Top parties</h3>
+    {% for p in report.parties %}
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;gap:8px"><span>{{ p.name }}</span><span class="num">&#8377; {{ p.total|inr }}</span></div>
+        <div class="share"><div class="track"><div class="fill" style="width:{{ p.share|floatformat:1 }}%"></div></div><span class="muted" style="font-size:12px">{{ p.share|floatformat:0 }}%</span></div>
+      </div>
+    {% empty %}<p class="muted">No submitted bills in this year yet.</p>{% endfor %}
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <h3>Month-wise summary</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>Month</th><th class="num">Bills</th><th class="num">Taxable value</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">IGST</th><th class="num">Total GST</th><th class="num">Invoice total</th></tr></thead>
+    <tbody>
+    {% for m in report.months %}
+      <tr{% if m.is_future %} class="future"{% endif %}><td>{{ m.label }}</td><td class="num">{{ m.bills }}</td><td class="num">{{ m.taxable|inr }}</td><td class="num">{{ m.cgst|inr }}</td><td class="num">{{ m.sgst|inr }}</td><td class="num">{{ m.igst|inr }}</td><td class="num">{{ m.gst|inr }}</td><td class="num">{{ m.total|inr }}</td></tr>
+    {% endfor %}
+      <tr class="total"><td>Total</td><td class="num">{{ report.totals.bills }}</td><td class="num">{{ report.totals.taxable|inr }}</td><td class="num">{{ report.totals.cgst|inr }}</td><td class="num">{{ report.totals.sgst|inr }}</td><td class="num">{{ report.totals.igst|inr }}</td><td class="num">{{ report.totals.gst|inr }}</td><td class="num">{{ report.totals.total|inr }}</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note">Invoice total includes round-off ({{ report.totals.round_off|inr }} for the year).</div>
+</div>
+
+<div class="grid2 even">
+  <div class="card">
+    <h3>GST rate-wise</h3>
+    <table>
+      <thead><tr><th>GST rate</th><th class="num">Taxable value</th><th class="num">GST</th></tr></thead>
+      <tbody>
+      {% for r in report.rates %}<tr><td>{{ r.rate|floatformat:"-2" }}%</td><td class="num">{{ r.taxable|inr }}</td><td class="num">{{ r.gst|inr }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="muted">No data yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Same state vs other state</h3>
+    <table>
+      <thead><tr><th>Supply</th><th class="num">Bills</th><th class="num">Taxable value</th><th class="num">Invoice total</th></tr></thead>
+      <tbody>
+        <tr><td>Same state (CGST + SGST)</td><td class="num">{{ report.intra.bills }}</td><td class="num">{{ report.intra.taxable|inr }}</td><td class="num">{{ report.intra.total|inr }}</td></tr>
+        <tr><td>Other state (IGST)</td><td class="num">{{ report.inter.bills }}</td><td class="num">{{ report.inter.taxable|inr }}</td><td class="num">{{ report.inter.total|inr }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
