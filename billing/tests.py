@@ -302,6 +302,9 @@ class BillingViewTests(TestCase):
         rows = r.context["summary"]
         self.assertEqual([(x["taxable"], x["cgst"], x["sgst"]) for x in rows], [(500, 30, 30), (1000, 90, 90)])
         self.assertContains(r, "Total GST")
+        lines = r.context["items"]  # every line carries its own CGST and SGST that add up to the line's GST
+        self.assertEqual([(l["cgst"], l["sgst"]) for l in lines], [(90, 90), (30, 30)])
+        self.assertTrue(all(l["cgst"] + l["sgst"] == l["gst_amount"] for l in lines))
         single = self.save(payload(invoice_no="T-2")).json()["id"]
         self.assertNotContains(self.client.get(reverse("invoice_print", args=[single])), "Total GST")
 
@@ -316,7 +319,7 @@ class BillingViewTests(TestCase):
         self.assertIn("Kg", self.client.get(reverse("invoice_new")).context["init"]["units"])
         inv_id = self.save(payload()).json()["id"]
         html = self.client.get(reverse("invoice_print", args=[inv_id])).content.decode()
-        self.assertIn("18%", html)       # GST rate with its % sign
+        self.assertIn("9%", html)        # CGST and SGST rates, each with its % sign
         self.assertIn(">-</td>", html)   # no discount -> a hyphen
 
 

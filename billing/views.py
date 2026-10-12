@@ -462,6 +462,19 @@ def _stored_summary(invoice, items):
     return rate_summary(entries)
 
 
+def _print_lines(invoice, items):
+    """The invoice lines for printing, each with its own CGST / SGST (or IGST) split like when it was calculated."""
+    out = []
+    for it in items:
+        cgst, sgst, igst = split_gst(it.gst_amount, invoice.is_intra_state)
+        out.append({
+            "sr": it.sr, "description": it.description, "hsn": it.hsn, "qty": it.qty, "unit": it.unit, "rate": it.rate,
+            "discount_pct": it.discount_pct, "gst_rate": it.gst_rate, "half_rate": it.gst_rate / 2, "taxable": it.taxable,
+            "gst_amount": it.gst_amount, "cgst": cgst, "sgst": sgst, "igst": igst, "line_total": it.line_total,
+        })
+    return out
+
+
 @login_required
 def invoice_print(request, pk):
     invoice = get_object_or_404(Invoice.objects.prefetch_related("items"), pk=pk)
@@ -471,7 +484,7 @@ def invoice_print(request, pk):
         "billing/invoice_print.html",
         {
             "invoice": invoice,
-            "items": invoice.items.all(),
+            "items": _print_lines(invoice, invoice.items.all()),
             "firm": firm,
             "firm_state_code": STATE_CODES.get(firm.state, ""),
             "pos_code": STATE_CODES.get(invoice.place_of_supply, ""),

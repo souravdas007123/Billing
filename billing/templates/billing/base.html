@@ -118,8 +118,9 @@
     main { padding: 14px 12px; }
   }
   @media print {
+    :root { color-scheme: light; }
+    html, body { background: #fff; color: #000; }
     header.top { display: none; }
-    body { background: #fff; color: #000; }
   }
 </style>
 {% block head %}{% endblock %}

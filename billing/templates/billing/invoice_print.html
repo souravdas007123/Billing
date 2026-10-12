@@ -21,6 +21,7 @@
   .sum td { border:1px solid #444; }
   .sum tr.g td { font-weight:700; font-size:14px; }
   .pre { white-space:pre-line; }
+  .sheet table.lines th, .sheet table.lines td { font-size:11px; padding:3px 4px; }
   .taxsum { margin-top:10px; }
   .taxsum th, .taxsum td { font-size:11.5px; }
   .foot { display:grid; grid-template-columns:1.4fr 1fr; gap:14px; margin-top:12px; }
@@ -83,11 +84,16 @@
     </div>
   </div>
 
-  <table>
+  <table class="lines">
     <thead>
       <tr>
-        <th style="width:28px">#</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th>
-        <th>Discount</th><th>Taxable value</th><th>GST rate</th><th>GST amount</th><th>Amount</th>
+        <th rowspan="2" style="width:24px">#</th><th rowspan="2">Description</th><th rowspan="2">HSN</th><th rowspan="2">Qty</th><th rowspan="2">Rate</th>
+        <th rowspan="2">Disc.</th><th rowspan="2">Taxable value</th>
+        {% if invoice.is_intra_state %}<th colspan="2">CGST</th><th colspan="2">SGST</th>{% else %}<th colspan="2">IGST</th>{% endif %}
+        <th rowspan="2">Amount</th>
+      </tr>
+      <tr>
+        {% if invoice.is_intra_state %}<th>Rate</th><th>Amt</th><th>Rate</th><th>Amt</th>{% else %}<th>Rate</th><th>Amt</th>{% endif %}
       </tr>
     </thead>
     <tbody>
@@ -100,8 +106,12 @@
         <td class="r">{{ it.rate|floatformat:2 }}</td>
         <td class="r">{% if it.discount_pct %}{{ it.discount_pct|floatformat:"-2" }}%{% else %}-{% endif %}</td>
         <td class="r">{{ it.taxable|floatformat:2 }}</td>
-        <td class="r">{{ it.gst_rate|floatformat:"-2" }}%</td>
-        <td class="r">{{ it.gst_amount|floatformat:2 }}</td>
+        {% if invoice.is_intra_state %}
+        <td class="r">{{ it.half_rate|floatformat:"-2" }}%</td><td class="r">{{ it.cgst|floatformat:2 }}</td>
+        <td class="r">{{ it.half_rate|floatformat:"-2" }}%</td><td class="r">{{ it.sgst|floatformat:2 }}</td>
+        {% else %}
+        <td class="r">{{ it.gst_rate|floatformat:"-2" }}%</td><td class="r">{{ it.igst|floatformat:2 }}</td>
+        {% endif %}
         <td class="r">{{ it.line_total|floatformat:2 }}</td>
       </tr>
     {% endfor %}
