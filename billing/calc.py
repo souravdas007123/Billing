@@ -6,6 +6,8 @@ Rules:
 - Inclusive: line total = qty*rate - discount (the final amount); taxable = total*100/(100+gst%).
 - GST is rounded per line; CGST = GST/2 (rounded) and SGST = GST - CGST, so the two always add up to the GST.
 - The invoice total is rounded to the nearest rupee, and the round-off is shown as a separate line.
+- Amount-entry mode: the user types each line's final amount (GST included). The taxable value and GST are
+  taken out of that amount, and the rate is derived as taxable value / quantity.
 """
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -61,14 +63,39 @@ def compute_line(qty, rate, discount_pct, gst_rate, inclusive, intra):
     }
 
 
-def compute_invoice(items, inclusive, intra):
-    """items: list of dicts (qty, rate, discount_pct, gst_rate). Blank lines produce zeros."""
-    lines = [
-        compute_line(
-            it.get("qty"), it.get("rate"), it.get("discount_pct"), it.get("gst_rate"), inclusive, intra
-        )
-        for it in items
-    ]
+FOUR = Decimal("0.0001")
+
+
+def compute_line_from_amount(qty, amount, gst_rate, intra):
+    """Amount-entry mode: `amount` is the line's final total, GST included.
+
+    The line total always equals the amount typed. The rate is derived (taxable value / quantity),
+    and a blank or zero quantity is treated as 1.
+    """
+    qty = D(qty)
+    if qty <= 0:
+        qty = Decimal(1)
+    line = compute_line(1, amount, 0, gst_rate, True, intra)
+    line["rate"] = (line["taxable"] / qty).quantize(FOUR, rounding=ROUND_HALF_UP)
+    return line
+
+
+def compute_invoice(items, inclusive, intra, amount_mode=False):
+    """items: list of dicts (qty, rate, discount_pct, gst_rate; or qty, amount, gst_rate in amount mode).
+
+    Blank lines produce zeros.
+    """
+    if amount_mode:
+        lines = [
+            compute_line_from_amount(it.get("qty"), it.get("amount"), it.get("gst_rate"), intra) for it in items
+        ]
+    else:
+        lines = [
+            compute_line(
+                it.get("qty"), it.get("rate"), it.get("discount_pct"), it.get("gst_rate"), inclusive, intra
+            )
+            for it in items
+        ]
     zero = Decimal("0.00")
     taxable = sum((l["taxable"] for l in lines), zero)
     cgst = sum((l["cgst"] for l in lines), zero)

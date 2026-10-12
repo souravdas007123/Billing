@@ -12,7 +12,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from .calc import D, amount_in_words, compute_invoice
+from .calc import D, amount_in_words, compute_invoice, q2
 from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
 
 MAX_ROWS = 500
@@ -40,6 +40,13 @@ def _err(errors, status=400):
     return JsonResponse({"ok": False, "errors": errors}, status=status)
 
 
+PRICE_MODES = ("AMT", "EXCL", "INCL")
+
+
+def _price_mode(value):
+    return value if value in PRICE_MODES else "EXCL"
+
+
 def _is_intra(firm, place_of_supply):
     place = (place_of_supply or "").strip()
     return place == "" or place == firm.state
@@ -49,7 +56,7 @@ def _serialize(result):
     out = {k: _money(result[k]) for k in ("taxable", "cgst", "sgst", "igst", "gst_total", "round_off", "total")}
     out["words"] = result["words"]
     out["intra"] = result["intra"]
-    out["lines"] = [{k: _money(v) for k, v in line.items()} for line in result["lines"]]
+    out["lines"] = [{k: _money(q2(v) if k == "rate" else v) for k, v in line.items()} for line in result["lines"]]
     return out
 
 
@@ -70,10 +77,12 @@ def calc_api(request):
     items = [i if isinstance(i, dict) else {} for i in items]
     firm = Firm.get()
     try:
+        mode = _price_mode(data.get("price_mode"))
         result = compute_invoice(
             items,
-            inclusive=data.get("price_mode") == "INCL",
+            inclusive=mode == "INCL",
             intra=_is_intra(firm, data.get("place_of_supply")),
+            amount_mode=mode == "AMT",
         )
     except ArithmeticError:
         return _err(["One of the amounts is too large."])
@@ -109,7 +118,8 @@ def _clean_payload(data, firm):
     if place not in STATE_CODES:
         errors.append("Select a valid place of supply.")
 
-    price_mode = "INCL" if data.get("price_mode") == "INCL" else "EXCL"
+    price_mode = _price_mode(data.get("price_mode"))
+    amount_mode = price_mode == "AMT"
 
     allowed_rates = set(settings.GST_RATES)
     rows = data.get("items")
@@ -124,11 +134,14 @@ def _clean_payload(data, firm):
         desc = str(r.get("description") or "").strip()
         qty_text = str(r.get("qty") or "").strip()
         rate_text = str(r.get("rate") or "").strip()
-        if not desc and not qty_text and not rate_text:
+        amount_text = str(r.get("amount") or "").strip()
+        if not desc and not qty_text and not (amount_text if amount_mode else rate_text):
             continue  # skip empty lines
         label = f"Line {n}"
-        qty, rate = D(qty_text), D(rate_text)
-        disc, gst = D(r.get("discount_pct")), D(r.get("gst_rate"))
+        qty = Decimal(1) if (amount_mode and qty_text == "") else D(qty_text)
+        rate, amount = D(rate_text), D(amount_text)
+        disc = Decimal(0) if amount_mode else D(r.get("discount_pct"))
+        gst = D(r.get("gst_rate"))
         hsn, unit = str(r.get("hsn") or "").strip(), str(r.get("unit") or "").strip()
 
         if not desc:
@@ -139,7 +152,14 @@ def _clean_payload(data, firm):
             errors.append(f"{label}: quantity must be greater than 0.")
         elif not _decimals_ok(qty, 3):
             errors.append(f"{label}: quantity can have at most 3 decimal places.")
-        if rate_text == "":
+        if amount_mode:
+            if amount_text == "":
+                errors.append(f"{label}: enter the amount.")
+            elif amount <= 0 or amount >= Decimal(10) ** 9:
+                errors.append(f"{label}: the amount must be greater than 0.")
+            elif not _decimals_ok(amount, 2):
+                errors.append(f"{label}: the amount can have at most 2 decimal places.")
+        elif rate_text == "":
             errors.append(f"{label}: enter the rate.")
         elif rate < 0 or rate >= Decimal(10) ** 9:
             errors.append(f"{label}: the rate is not valid.")
@@ -155,7 +175,7 @@ def _clean_payload(data, firm):
             errors.append(f"{label}: the unit is too long.")
 
         items.append(
-            {"description": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate,
+            {"description": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate, "amount": amount,
              "discount_pct": disc, "gst_rate": gst}
         )
 
@@ -165,9 +185,14 @@ def _clean_payload(data, firm):
         return None, errors
 
     try:
-        result = compute_invoice(items, inclusive=price_mode == "INCL", intra=_is_intra(firm, place))
+        result = compute_invoice(
+            items, inclusive=price_mode == "INCL", intra=_is_intra(firm, place), amount_mode=amount_mode
+        )
     except ArithmeticError:
         return None, ["One of the amounts is too large."]
+    if amount_mode:  # the rate is derived from the amount, so store the derived value
+        for it, line in zip(items, result["lines"]):
+            it["rate"] = line["rate"]
     if result["total"] > MAX_AMOUNT or any(l["total"] > MAX_AMOUNT for l in result["lines"]):
         return None, ["The invoice total is too large."]
 
@@ -278,7 +303,8 @@ def invoice_form(request, pk=None):
             "notes": invoice.notes,
             "items": [
                 {"description": i.description, "hsn": i.hsn, "qty": _plain(i.qty), "unit": i.unit,
-                 "rate": _plain(i.rate), "discount_pct": _plain(i.discount_pct), "gst_rate": _plain(i.gst_rate)}
+                 "rate": _plain(i.rate), "amount": _plain(i.line_total),
+                 "discount_pct": _plain(i.discount_pct), "gst_rate": _plain(i.gst_rate)}
                 for i in invoice.items.all()
             ],
         }
@@ -287,7 +313,7 @@ def invoice_form(request, pk=None):
         inv = {
             "invoice_no": Invoice.next_number(firm.invoice_prefix, today),
             "date": today.isoformat(),
-            "price_mode": "EXCL",
+            "price_mode": "AMT",
             "party_name": "", "party_address": "", "party_gstin": "", "party_state": "",
             "party_phone": "", "place_of_supply": "", "notes": "", "items": [],
         }

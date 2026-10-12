@@ -18,7 +18,11 @@ STATE_CODES = {
 STATE_CHOICES = [(name, name) for name in STATE_CODES]
 CODE_TO_STATE = {code: name for name, code in STATE_CODES.items()}
 
-PRICE_MODES = [("EXCL", "GST Excluding"), ("INCL", "GST Including")]
+PRICE_MODES = [
+    ("AMT", "Amount entry (GST included)"),
+    ("EXCL", "GST excluded"),
+    ("INCL", "GST included"),
+]
 
 
 def state_from_gstin(gstin):

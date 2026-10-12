@@ -12,8 +12,9 @@
   .hint { font-size:12px; color:var(--muted); }
   .scroll { overflow-x:auto; }
   #items input, #items select { padding:6px 8px; margin-top:0; }
-  #items td.out { background:var(--calc); padding:6px 10px; white-space:nowrap; min-width:92px; border-bottom-color:var(--bg); }
-  #items tr:hover td:not(.out) { background:rgba(255,255,255,.015); }
+  #items .o { display:block; background:var(--calc); padding:6px 10px; border-radius:6px; text-align:right; white-space:nowrap; min-width:92px; font-variant-numeric:tabular-nums; }
+  #items tr:hover td { background:rgba(255,255,255,.015); }
+  #items_table.m-amt .for-rate, #items_table.m-rate .for-amt { display:none; }
   #items .x { padding:2px 9px; color:var(--muted); border-color:transparent; background:transparent; font-size:13px; }
   #items .x:hover { color:var(--bad); background:var(--bad-bg); }
   .bottom { display:grid; grid-template-columns: 1fr 400px; gap:14px; margin-top:14px; }
@@ -41,10 +42,11 @@
     <label>Date
       <input id="date" type="date">
     </label>
-    <label>Pricing
+    <label>Entry mode
       <select id="price_mode">
-        <option value="EXCL">GST excluded (GST is added on top)</option>
-        <option value="INCL">GST included (rates already contain GST)</option>
+        <option value="AMT">Enter amount (GST included); rate is calculated</option>
+        <option value="EXCL">Enter rate, GST excluded (GST is added on top)</option>
+        <option value="INCL">Enter rate, GST included (rates already contain GST)</option>
       </select>
     </label>
   </section>
@@ -85,24 +87,23 @@
     </label>
     <button type="button" id="apply_all">Apply to all lines</button>
     <label>Column order when pasting
-      <select id="paste_map">
-        <option value="description,qty,rate">Item | Qty | Rate</option>
-        <option value="description,hsn,qty,rate">Item | HSN | Qty | Rate</option>
-        <option value="description,qty,unit,rate">Item | Qty | Unit | Rate</option>
-        <option value="description,qty,rate,gst_rate">Item | Qty | Rate | GST%</option>
-        <option value="description,hsn,qty,unit,rate,gst_rate">Item | HSN | Qty | Unit | Rate | GST%</option>
-      </select>
+      <select id="paste_map"></select>
     </label>
     <span class="hint">Copy rows from Excel and press Ctrl+V anywhere on this page to fill all lines at once.</span>
   </div>
   <div class="scroll">
     <datalist id="product_list"></datalist>
-    <table>
+    <table id="items_table" class="m-amt">
       <thead>
         <tr>
           <th>#</th><th>Item / description</th><th>HSN</th><th class="num">Qty</th><th>Unit</th>
-          <th class="num">Rate</th><th class="num">Discount %</th><th>GST %</th>
-          <th class="num">Taxable value</th><th class="num">GST</th><th class="num">Amount</th><th></th>
+          <th class="num for-rate">Rate</th>
+          <th class="num for-amt">Amount (incl. GST)</th>
+          <th class="num for-rate">Discount %</th>
+          <th>GST %</th>
+          <th class="num for-amt">Rate (excl. GST)</th>
+          <th class="num">Taxable value</th><th class="num">GST</th>
+          <th class="num for-rate">Amount</th><th></th>
         </tr>
       </thead>
       <tbody id="items"></tbody>
@@ -143,7 +144,7 @@
   const INIT = JSON.parse(document.getElementById('init-data').textContent);
   const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
   const $ = id => document.getElementById(id);
-  const FIELDS = ['description', 'hsn', 'qty', 'unit', 'rate', 'discount_pct', 'gst_rate'];
+  const FIELDS = ['description', 'hsn', 'qty', 'unit', 'rate', 'amount', 'discount_pct', 'gst_rate'];
   const tbody = $('items');
   const STATES = Object.keys(INIT.state_codes);
   const CODE_TO_STATE = {};
@@ -170,8 +171,78 @@
   INIT.products.forEach(p => { const o = document.createElement('option'); o.value = p.name; $('product_list').appendChild(o); });
   const rateOptions = INIT.gst_rates.map(r => '<option value="' + r + '">' + r + '%</option>').join('');
 
-  try { const saved = localStorage.getItem('paste_map'); if (saved) $('paste_map').value = saved; } catch (e) {}
-  $('paste_map').addEventListener('change', () => { try { localStorage.setItem('paste_map', $('paste_map').value); } catch (e) {} });
+  // ---------- entry mode (amount entry vs rate entry) ----------
+  const PASTE = {
+    amt: [
+      ['description,qty,amount', 'Item | Qty | Amount'],
+      ['description,amount', 'Item | Amount'],
+      ['description,hsn,qty,amount', 'Item | HSN | Qty | Amount'],
+      ['description,qty,unit,amount', 'Item | Qty | Unit | Amount'],
+      ['description,qty,amount,gst_rate', 'Item | Qty | Amount | GST%'],
+      ['description,hsn,qty,unit,amount,gst_rate', 'Item | HSN | Qty | Unit | Amount | GST%'],
+    ],
+    rate: [
+      ['description,qty,rate', 'Item | Qty | Rate'],
+      ['description,hsn,qty,rate', 'Item | HSN | Qty | Rate'],
+      ['description,qty,unit,rate', 'Item | Qty | Unit | Rate'],
+      ['description,qty,rate,gst_rate', 'Item | Qty | Rate | GST%'],
+      ['description,hsn,qty,unit,rate,gst_rate', 'Item | HSN | Qty | Unit | Rate | GST%'],
+    ],
+  };
+  const isAmt = () => $('price_mode').value === 'AMT';
+  const pasteKey = () => 'paste_map_' + (isAmt() ? 'amt' : 'rate');
+  let lastLines = [];
+  let calcPending = false;
+  let lastMode = null;
+
+  function buildPasteOptions() {
+    const sel = $('paste_map');
+    sel.innerHTML = '';
+    PASTE[isAmt() ? 'amt' : 'rate'].forEach(([v, label]) => sel.add(new Option(label, v)));
+    try { const saved = localStorage.getItem(pasteKey()); if (saved && [...sel.options].some(o => o.value === saved)) sel.value = saved; } catch (e) {}
+  }
+  $('paste_map').addEventListener('change', () => { try { localStorage.setItem(pasteKey(), $('paste_map').value); } catch (e) {} });
+
+  // When the entry mode changes between amount entry and rate entry, carry each line's numbers across so
+  // nothing has to be retyped and the invoice total stays the same.
+  const numOf = v => Number(cleanNum(v));
+  function carryToRate(mode) {
+    allRows().forEach((tr, i) => {
+      const l = lastLines[i];
+      if (!l || !(Number(l.total) > 0)) return;
+      const qtyTyped = numOf(get(tr, 'qty'));
+      const qty = qtyTyped > 0 ? qtyTyped : 1;  // amount entry treats a blank quantity as 1
+      if (!(qtyTyped > 0)) set(tr, 'qty', '1');
+      const target = Number(mode === 'INCL' ? l.total : l.taxable);  // an included rate contains the GST
+      const rate = Number((target / qty).toFixed(4));
+      // Only keep the rate when it reproduces this line exactly; otherwise leave it blank so it is entered by hand.
+      set(tr, 'rate', Math.abs(qty * rate - target) < 0.005 ? String(rate) : '');
+      set(tr, 'discount_pct', '');  // the amount is already net of any discount
+      tr.dataset.carryKey = lineKey(tr, mode);
+    });
+  }
+  // The amount typed before the switch is kept if the line was not changed in rate mode. Without this, a round
+  // trip could move an amount by a paisa, because GST excluded and GST included round differently.
+  const lineKey = (tr, mode) => [mode, get(tr, 'qty'), get(tr, 'rate'), get(tr, 'gst_rate'), get(tr, 'discount_pct')].join('|');
+  function carryToAmount(prevMode) {
+    allRows().forEach((tr, i) => {
+      const l = lastLines[i];
+      if (!l || !(Number(l.total) > 0)) return;
+      if (tr.dataset.carryKey && tr.dataset.carryKey === lineKey(tr, prevMode) && get(tr, 'amount').trim()) return;
+      delete tr.dataset.carryKey;
+      set(tr, 'amount', String(Number(l.total)));
+    });
+  }
+  function applyMode() {
+    const mode = $('price_mode').value;
+    if (lastMode !== null && (lastMode === 'AMT') !== (mode === 'AMT') && !calcPending && lastLines.length === allRows().length) {
+      if (mode === 'AMT') carryToAmount(lastMode); else carryToRate(mode);
+    }
+    lastMode = mode;
+    $('items_table').className = isAmt() ? 'm-amt' : 'm-rate';
+    buildPasteOptions();
+    scheduleCalc();
+  }
 
   // ---------- row helpers ----------
   const get = (tr, f) => tr.querySelector('[data-f="' + f + '"]').value;
@@ -180,7 +251,7 @@
     if (f === 'gst_rate' && v !== '' && ![...el.options].some(o => o.value === String(v))) el.add(new Option(v + '%', v));
     el.value = v == null ? '' : v;
   }
-  const rowIsEmpty = tr => !get(tr, 'description').trim() && !get(tr, 'qty').trim() && !get(tr, 'rate').trim();
+  const rowIsEmpty = tr => !get(tr, 'description').trim() && !get(tr, 'qty').trim() && !get(tr, isAmt() ? 'amount' : 'rate').trim();
   const allRows = () => [...tbody.rows];
   function renumber() { allRows().forEach((tr, i) => { tr.querySelector('.sr').textContent = i + 1; }); }
 
@@ -193,12 +264,14 @@
       '<td><input data-f="hsn" maxlength="12" style="width:84px"></td>' +
       '<td><input data-f="qty" inputmode="decimal" class="num" style="width:76px"></td>' +
       '<td><input data-f="unit" maxlength="20" style="width:64px"></td>' +
-      '<td><input data-f="rate" inputmode="decimal" class="num" style="width:96px"></td>' +
-      '<td><input data-f="discount_pct" inputmode="decimal" class="num" style="width:64px"></td>' +
+      '<td class="for-rate"><input data-f="rate" inputmode="decimal" class="num" style="width:96px"></td>' +
+      '<td class="for-amt"><input data-f="amount" inputmode="decimal" class="num" style="width:110px"></td>' +
+      '<td class="for-rate"><input data-f="discount_pct" inputmode="decimal" class="num" style="width:64px"></td>' +
       '<td><select data-f="gst_rate" style="width:84px">' + rateOptions + '</select></td>' +
-      '<td class="num out" data-o="taxable">0.00</td>' +
-      '<td class="num out" data-o="gst">0.00</td>' +
-      '<td class="num out" data-o="total">0.00</td>' +
+      '<td class="for-amt"><span class="o" data-o="rate">0.00</span></td>' +
+      '<td><span class="o" data-o="taxable">0.00</span></td>' +
+      '<td><span class="o" data-o="gst">0.00</span></td>' +
+      '<td class="for-rate"><span class="o" data-o="total">0.00</span></td>' +
       '<td><button type="button" class="x" tabindex="-1" title="Remove line" aria-label="Remove line">&#10005;</button></td>';
     tbody.insertBefore(tr, afterTr ? afterTr.nextSibling : null);
     set(tr, 'description', v.description);
@@ -206,6 +279,7 @@
     set(tr, 'qty', v.qty);
     set(tr, 'unit', v.unit == null ? 'Nos' : v.unit);
     set(tr, 'rate', v.rate);
+    set(tr, 'amount', v.amount);
     set(tr, 'discount_pct', v.discount_pct && v.discount_pct !== '0' ? v.discount_pct : '');
     if (v.gst_rate != null && v.gst_rate !== '') { set(tr, 'gst_rate', v.gst_rate); tr.dataset.manualGst = '1'; }
     else set(tr, 'gst_rate', $('default_gst').value);
@@ -220,7 +294,7 @@
     if (!p) return;
     if (!provided.has('hsn') && !get(tr, 'hsn')) set(tr, 'hsn', p.hsn);
     if (!provided.has('unit')) set(tr, 'unit', p.unit || 'Nos');
-    if (!provided.has('rate') && !get(tr, 'rate')) set(tr, 'rate', p.rate === '0' ? '' : p.rate);
+    if (!isAmt() && !provided.has('rate') && !get(tr, 'rate')) set(tr, 'rate', p.rate === '0' ? '' : p.rate);
     if (!provided.has('gst_rate') && !tr.dataset.manualGst) { set(tr, 'gst_rate', p.gst_rate); tr.dataset.manualGst = '1'; }
   }
 
@@ -255,9 +329,9 @@
     let lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
     if (!lines.length) return;
     const isNum = s => { s = cleanNum(s); return s !== '' && isFinite(Number(s)); };
-    const qi = map.indexOf('qty'), ri = map.indexOf('rate');
+    const numeric = ['qty', 'rate', 'amount'].map(f => map.indexOf(f)).filter(i => i >= 0);
     const head = lines[0].split('\t');
-    if (qi >= 0 && ri >= 0 && !isNum(head[qi] || '') && !isNum(head[ri] || '')) lines.shift();  // skip the header row
+    if (numeric.length && numeric.every(i => !isNum(head[i] || ''))) lines.shift();  // skip the header row
     if (!lines.length) return;
 
     let tr = null;
@@ -324,7 +398,7 @@
     scheduleCalc();
   });
   $('place_of_supply').addEventListener('change', () => { posManual = true; scheduleCalc(); });
-  $('price_mode').addEventListener('change', scheduleCalc);
+  $('price_mode').addEventListener('change', applyMode);
 
   const GC = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   function gstinOk(g) {
@@ -355,7 +429,7 @@
 
   // ---------- calculation (the server always does the final math) ----------
   let calcTimer = null, calcSeq = 0;
-  function scheduleCalc() { clearTimeout(calcTimer); calcTimer = setTimeout(calc, 180); }
+  function scheduleCalc() { calcPending = true; clearTimeout(calcTimer); calcTimer = setTimeout(calc, 180); }
   const effectivePlace = () => $('place_of_supply').value || $('party_state').value;
 
   function collect() {
@@ -386,6 +460,8 @@
       if (seq !== calcSeq) return;
       if (!j.ok) { $('calc_status').textContent = (j.errors || ['Could not calculate the totals.']).join(' '); return; }
       $('calc_status').textContent = '';
+      calcPending = false;
+      lastLines = j.lines;
       render(j);
     } catch (e) {
       if (seq === calcSeq) $('calc_status').textContent = 'Cannot reach the server.';
@@ -394,6 +470,7 @@
   function render(j) {
     allRows().forEach((tr, i) => {
       const l = j.lines[i]; if (!l) return;
+      if (l.rate != null) tr.querySelector('[data-o="rate"]').textContent = fmt(l.rate);
       tr.querySelector('[data-o="taxable"]').textContent = fmt(l.taxable);
       tr.querySelector('[data-o="gst"]').textContent = fmt(l.gst);
       tr.querySelector('[data-o="total"]').textContent = fmt(l.total);
@@ -447,6 +524,7 @@
   $('invoice_no').value = inv.invoice_no;
   $('date').value = inv.date;
   $('price_mode').value = inv.price_mode;
+  applyMode();
   $('party_name').value = inv.party_name;
   $('party_address').value = inv.party_address;
   $('party_gstin').value = inv.party_gstin;

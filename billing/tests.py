@@ -103,6 +103,47 @@ class BillingViewTests(TestCase):
         self.assertEqual(len(data["lines"]), 2)
 
 
+    def test_amount_mode_derives_rate_taxable_and_gst(self):
+        items = [{"description": "Pen", "qty": "4", "amount": "1180", "gst_rate": "18"}]
+        r = self.save(payload(price_mode="AMT", items=items))
+        self.assertEqual(r.status_code, 200, r.content)
+        inv = Invoice.objects.get(invoice_no="T-1")
+        self.assertEqual(inv.price_mode, "AMT")
+        self.assertEqual((inv.taxable_value, inv.cgst, inv.sgst, inv.igst, inv.total), (1000, 90, 90, 0, 1180))
+        item = inv.items.get()
+        self.assertEqual((item.rate, item.taxable, item.gst_amount, item.line_total), (250, 1000, 180, 1180))
+
+    def test_amount_mode_blank_quantity_counts_as_one(self):
+        items = [{"description": "Pen", "qty": "", "amount": "118", "gst_rate": "18"}]
+        self.assertEqual(self.save(payload(price_mode="AMT", items=items)).status_code, 200)
+        item = Invoice.objects.get().items.get()
+        self.assertEqual((item.qty, item.rate), (1, 100))
+
+    def test_amount_mode_rejects_missing_or_zero_amount(self):
+        for amount in ("", "0", "-5"):
+            items = [{"description": "Pen", "qty": "1", "amount": amount, "gst_rate": "18"}]
+            self.assertEqual(self.save(payload(price_mode="AMT", items=items)).status_code, 400, amount)
+        self.assertEqual(Invoice.objects.count(), 0)
+
+    def test_amount_mode_invoice_reopens_and_can_be_updated(self):
+        items = [{"description": "Pen", "qty": "4", "amount": "1180", "gst_rate": "18"}]
+        inv_id = self.save(payload(price_mode="AMT", items=items)).json()["id"]
+        self.assertEqual(self.client.get(reverse("invoice_edit", args=[inv_id])).status_code, 200)
+        items = [{"description": "Pen", "qty": "2", "amount": "236", "gst_rate": "18"}]
+        r = self.save(payload(price_mode="AMT", items=items), reverse("invoice_update", args=[inv_id]))
+        self.assertEqual(r.status_code, 200, r.content)
+        inv = Invoice.objects.get(pk=inv_id)
+        self.assertEqual((inv.total, inv.items.get().rate), (236, 100))
+
+    def test_live_calc_amount_mode(self):
+        body = {"price_mode": "AMT", "place_of_supply": "West Bengal",
+                "items": [{"qty": "4", "amount": "1180", "gst_rate": "18"}]}
+        data = self.client.post(reverse("calc_api"), json.dumps(body), content_type="application/json").json()
+        line = data["lines"][0]
+        self.assertEqual((line["rate"], line["taxable"], line["gst"], line["total"]), ("250.00", "1000.00", "180.00", "1180.00"))
+        self.assertEqual(data["total"], "1180.00")
+
+
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):
         self.assertEqual(Invoice.next_number("INV", datetime.date(2026, 10, 12)), "INV/26-27/0001")

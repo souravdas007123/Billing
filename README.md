@@ -31,19 +31,23 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - **Invoice number** is generated automatically (for example `INV/26-27/0001`) and restarts every financial year (April to March). You can edit it.
 - **Party**: selecting one fills in the address, GSTIN, state and phone. The place of supply follows the party's state.
 - **Items**: copy rows from Excel, then press Ctrl+V anywhere on the page. First choose the column order
-  (for example `Item | Qty | Rate`). A header row is skipped automatically.
+  (for example `Item | Qty | Amount`). A header row is skipped automatically.
 - **GST rate**: choose it once at the top and it applies to every line. Change a single line to give it a different rate.
-- **GST included / excluded**: one dropdown switches the whole calculation.
+- **Entry mode** (default: amount entry): type each line's **amount with GST included**, and the app works out the
+  taxable value, GST and rate for you. A blank quantity counts as 1. Two other modes let you type the rate instead:
+  *rate, GST excluded* (GST is added on top) and *rate, GST included*. Switching modes keeps each line's numbers.
+  The printed invoice shows the derived rate (taxable value / quantity) without GST.
 - Totals, CGST / SGST / IGST, round-off and the amount in words update live.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated
 
 - The final calculation always happens on the server in `billing/calc.py`, using Decimal (never floats). What you see on screen is exactly what is saved.
+- Amount entry: the line total is exactly the amount you typed. The taxable value and GST are taken out of it, and the rate is the taxable value divided by the quantity.
 - GST excluded: GST is added on top of the taxable value. GST included: the GST is taken out of the rate, and the line total stays equal to what the rate gives.
 - GST is rounded per line, and CGST + SGST always add up to the GST. The invoice total is rounded to the nearest rupee.
 - The party's details are copied onto the invoice, so editing a party later does not change old invoices.
-- Invalid entries (quantity 0, a missing rate, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
+- Invalid entries (quantity 0, a missing rate or amount, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
 - The GSTIN checksum is verified (it shows a warning but does not block saving).
 
 ## Changing the GST rates
