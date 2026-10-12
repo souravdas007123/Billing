@@ -25,6 +25,20 @@ PRICE_MODES = [
 ]
 
 
+# The kind of document. A bill of supply (no GST charged: composition dealer, exempt goods) and an estimate (not a tax
+# document at all) each have their own number series, so the tax invoice series stays unbroken.
+DOC_TYPES = [
+    ("TAX", "Tax invoice"),
+    ("SUPPLY", "Bill of supply (no GST)"),
+    ("EST", "Estimate (no GST, not a tax document)"),
+]
+DOC_PREFIXES = {"SUPPLY": "BOS", "EST": "EST"}  # a tax invoice uses the firm's own prefix
+
+
+def doc_prefix(firm, doc_type):
+    return firm.invoice_prefix if doc_type == "TAX" else DOC_PREFIXES[doc_type]
+
+
 def state_from_gstin(gstin):
     g = (gstin or "").strip()
     return CODE_TO_STATE.get(g[:2], "") if len(g) >= 2 else ""
@@ -113,6 +127,7 @@ class Invoice(models.Model):
     party_email = models.EmailField(blank=True)
 
     place_of_supply = models.CharField(max_length=60, blank=True)
+    doc_type = models.CharField(max_length=6, choices=DOC_TYPES, default="TAX")
     price_mode = models.CharField(max_length=4, choices=PRICE_MODES, default="EXCL")
     is_intra_state = models.BooleanField(default=True)
 

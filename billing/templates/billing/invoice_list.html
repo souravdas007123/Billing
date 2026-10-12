@@ -19,6 +19,7 @@
   form.inline { display: inline; margin: 0; }
   button.link { padding: 0; border: 0; background: none; color: var(--accent); font-weight: 400; }
   button.link:hover { background: none; text-decoration: underline; }
+  .badge.kind { color:var(--muted); border-color:var(--line); background:transparent; margin-left:6px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -38,11 +39,11 @@
 </div>
 <div class="card" style="padding:0;overflow:hidden">
   <table class="list-table">
-    <thead><tr><th>Invoice no.</th><th>Date</th><th>Party</th><th class="num">Taxable value</th><th class="num">GST</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Number</th><th>Date</th><th>Party</th><th class="num">Taxable value</th><th class="num">GST</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for inv in invoices %}
       <tr>
-        <td>{% if inv.invoice_no %}<a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a>{% else %}<a href="{% url 'invoice_print' inv.pk %}" class="muted">No number yet</a>{% endif %}</td>
+        <td>{% if inv.invoice_no %}<a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a>{% else %}<a href="{% url 'invoice_print' inv.pk %}" class="muted">No number yet</a>{% endif %}{% if inv.doc_type != 'TAX' %} <span class="badge kind">{% if inv.doc_type == 'SUPPLY' %}Bill of supply{% else %}Estimate{% endif %}</span>{% endif %}</td>
         <td>{{ inv.date|date:"d-m-Y" }}</td>
         <td>{{ inv.party_name }}</td>
         <td class="num">{{ inv.taxable_value|floatformat:2 }}</td>

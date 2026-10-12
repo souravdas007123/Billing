@@ -187,7 +187,7 @@ class BillingViewTests(TestCase):
         self.assertIsNone(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"])
         self.save(payload(invoice_no="T-1"))
         self.save(payload(invoice_no="T-2"))
-        self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"]["no"], "T-2")
+        self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoices"]["TAX"]["no"], "T-2")
 
 
     def test_submitted_bill_gets_a_number_and_a_draft_does_not(self):
@@ -257,7 +257,7 @@ class BillingViewTests(TestCase):
     def test_last_invoice_hint_ignores_drafts(self):
         self.save(payload(invoice_no="T-1"))
         self.save(payload(submitted=False))
-        self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"]["no"], "T-1")
+        self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoices"]["TAX"]["no"], "T-1")
 
 
     def test_dashboard_counts_submitted_bills_only(self):
@@ -321,6 +321,59 @@ class BillingViewTests(TestCase):
         html = self.client.get(reverse("invoice_print", args=[inv_id])).content.decode()
         self.assertIn("9%", html)        # CGST and SGST rates, each with its % sign
         self.assertIn(">-</td>", html)   # no discount -> a hyphen
+
+
+    # ---- document types ----
+    def test_bill_of_supply_charges_no_gst_and_has_its_own_series(self):
+        r = self.save(payload(invoice_no="", doc_type="SUPPLY"))  # the payload still says 18% - it must be ignored
+        self.assertEqual(r.status_code, 200, r.content)
+        inv = Invoice.objects.get(pk=r.json()["id"])
+        self.assertEqual((inv.doc_type, inv.invoice_no), ("SUPPLY", "BOS/26-27/0001"))
+        self.assertEqual((inv.taxable_value, inv.cgst, inv.sgst, inv.igst, inv.total), (2000, 0, 0, 0, 2000))
+        self.assertEqual(set(inv.items.values_list("gst_rate", flat=True)), {0})
+        tax = Invoice.objects.get(pk=self.save(payload(invoice_no="")).json()["id"])
+        self.assertEqual(tax.invoice_no, "INV/26-27/0001")  # the tax series is untouched
+
+    def test_estimate_has_its_own_series_and_is_not_in_the_dashboard(self):
+        est = Invoice.objects.get(pk=self.save(payload(invoice_no="", doc_type="EST")).json()["id"])
+        self.assertEqual(est.invoice_no, "EST/26-27/0001")
+        self.save(payload(invoice_no="", doc_type="SUPPLY", party_name="Beta"))
+        self.save(payload(invoice_no=""))
+        report = self.client.get(reverse("dashboard")).context["report"]
+        self.assertEqual(report["totals"]["bills"], 2)                      # the estimate is left out
+        self.assertEqual((report["by_type"]["TAX"]["bills"], report["by_type"]["SUPPLY"]["bills"]), (1, 1))
+        self.assertEqual((report["registered"]["bills"], report["unregistered"]["bills"]), (0, 2))
+
+    def test_type_cannot_change_after_a_number_is_given_but_a_draft_can_change(self):
+        issued = self.save(payload(invoice_no="T-1")).json()["id"]
+        r = self.save(payload(invoice_no="T-1", doc_type="EST"), reverse("invoice_update", args=[issued]))
+        self.assertEqual(r.status_code, 400)
+        draft = self.save(payload(submitted=False)).json()["id"]
+        self.save(payload(invoice_no="", doc_type="SUPPLY"), reverse("invoice_update", args=[draft]))
+        self.assertEqual(Invoice.objects.get(pk=draft).invoice_no, "BOS/26-27/0001")
+
+    def test_submitting_a_draft_uses_its_types_series(self):
+        draft = self.save(payload(submitted=False, doc_type="EST")).json()["id"]
+        self.client.post(reverse("invoice_submit", args=[draft]), {"next": "/"})
+        self.assertEqual(Invoice.objects.get(pk=draft).invoice_no, "EST/26-27/0001")
+
+    def test_live_calc_ignores_gst_for_a_non_tax_bill(self):
+        body = {"price_mode": "EXCL", "place_of_supply": "West Bengal", "doc_type": "SUPPLY",
+                "items": [{"qty": "1", "rate": "100", "gst_rate": "18"}]}
+        data = self.client.post(reverse("calc_api"), json.dumps(body), content_type="application/json").json()
+        self.assertEqual((data["total"], data["gst_total"], data["summary"][0]["rate"]), ("100.00", "0.00", "0"))
+
+    def test_print_titles_and_unregistered_label(self):
+        tax = self.save(payload(invoice_no="T-1")).json()["id"]
+        html = self.client.get(reverse("invoice_print", args=[tax])).content.decode()
+        self.assertIn("TAX INVOICE", html)
+        self.assertIn("GSTIN: Unregistered", html)
+        sup = self.save(payload(invoice_no="", doc_type="SUPPLY")).json()["id"]
+        html = self.client.get(reverse("invoice_print", args=[sup])).content.decode()
+        self.assertIn("BILL OF SUPPLY", html)
+        self.assertNotIn("CGST", html)
+        est = self.save(payload(invoice_no="", doc_type="EST")).json()["id"]
+        self.assertContains(self.client.get(reverse("invoice_print", args=[est])), "not a tax invoice")
 
 
 class InvoiceNumberTests(TestCase):

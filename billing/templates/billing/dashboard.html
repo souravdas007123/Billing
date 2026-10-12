@@ -115,4 +115,28 @@
     </table>
   </div>
 </div>
+
+<div class="grid2 even" style="margin-top:16px">
+  <div class="card">
+    <h3>Registered vs unregistered parties</h3>
+    <table>
+      <thead><tr><th>Party</th><th class="num">Bills</th><th class="num">Taxable value</th><th class="num">Invoice total</th></tr></thead>
+      <tbody>
+        <tr><td>With GSTIN (B2B)</td><td class="num">{{ report.registered.bills }}</td><td class="num">{{ report.registered.taxable|inr }}</td><td class="num">{{ report.registered.total|inr }}</td></tr>
+        <tr><td>Without GSTIN (B2C)</td><td class="num">{{ report.unregistered.bills }}</td><td class="num">{{ report.unregistered.taxable|inr }}</td><td class="num">{{ report.unregistered.total|inr }}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Tax invoices vs bills of supply</h3>
+    <table>
+      <thead><tr><th>Type</th><th class="num">Bills</th><th class="num">Taxable value</th><th class="num">Invoice total</th></tr></thead>
+      <tbody>
+        <tr><td>Tax invoice</td><td class="num">{{ report.by_type.TAX.bills }}</td><td class="num">{{ report.by_type.TAX.taxable|inr }}</td><td class="num">{{ report.by_type.TAX.total|inr }}</td></tr>
+        <tr><td>Bill of supply (no GST)</td><td class="num">{{ report.by_type.SUPPLY.bills }}</td><td class="num">{{ report.by_type.SUPPLY.taxable|inr }}</td><td class="num">{{ report.by_type.SUPPLY.total|inr }}</td></tr>
+      </tbody>
+    </table>
+    <div class="note">Estimates are not sales and are left out of every figure on this page.</div>
+  </div>
+</div>
 {% endblock %}

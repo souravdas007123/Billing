@@ -6,10 +6,10 @@ from decimal import Decimal as D
 from .reports import build_report, fy_label, fy_months, fy_start_year, inr
 
 
-def inv(date, party, taxable, cgst="0", sgst="0", igst="0", round_off="0", total=None, intra=None):
+def inv(date, party, taxable, cgst="0", sgst="0", igst="0", round_off="0", total=None, intra=None, gstin="", doc_type="TAX"):
     taxable, cgst, sgst, igst, round_off = (D(x) for x in (taxable, cgst, sgst, igst, round_off))
     return {
-        "date": date, "party_name": party, "is_intra_state": (not igst) if intra is None else intra,
+        "date": date, "party_name": party, "party_gstin": gstin, "doc_type": doc_type, "is_intra_state": (not igst) if intra is None else intra,
         "taxable_value": taxable, "cgst": cgst, "sgst": sgst, "igst": igst, "round_off": round_off,
         "total": D(total) if total is not None else taxable + cgst + sgst + igst + round_off,
     }
@@ -92,6 +92,17 @@ class ReportTests(unittest.TestCase):
     def test_average_bill(self):
         r = self.report([inv(datetime.date(2026, 5, 1), "A", "100"), inv(datetime.date(2026, 5, 2), "A", "201")])
         self.assertEqual(r["average_bill"], D("150.50"))
+
+    def test_registered_vs_unregistered_and_by_type(self):
+        r = self.report([
+            inv(datetime.date(2026, 5, 1), "A", "100", "9", "9", gstin="19AAAAA0000A1Z5"),
+            inv(datetime.date(2026, 5, 2), "B", "200", "18", "18"),                        # no GSTIN: B2C
+            inv(datetime.date(2026, 5, 3), "C", "50", doc_type="SUPPLY"),                  # bill of supply, no GST
+        ])
+        self.assertEqual((r["registered"]["bills"], r["registered"]["taxable"]), (1, D("100")))
+        self.assertEqual((r["unregistered"]["bills"], r["unregistered"]["taxable"], r["unregistered"]["total"]), (2, D("250"), D("286")))
+        self.assertEqual((r["by_type"]["TAX"]["bills"], r["by_type"]["SUPPLY"]["bills"], r["by_type"]["SUPPLY"]["total"]), (2, 1, D("50")))
+        self.assertEqual(r["totals"]["bills"], 3)  # all of them count as sales
 
 
 class IndianGroupingTests(unittest.TestCase):

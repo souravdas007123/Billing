@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
 from .reports import build_report, fy_label, fy_start_year
-from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
+from .models import DOC_TYPES, STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product, doc_prefix
 
 MAX_ROWS = 500
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -52,6 +52,10 @@ def _price_mode(value):
     return value if value in PRICE_MODES else "EXCL"
 
 
+def _doc_type(value):
+    return value if value in dict(DOC_TYPES) else "TAX"
+
+
 def _is_intra(firm, place_of_supply):
     place = (place_of_supply or "").strip()
     return place == "" or place == firm.state
@@ -81,6 +85,8 @@ def calc_api(request):
     if not isinstance(items, list) or len(items) > MAX_ROWS:
         return _err(["The items are not valid."])
     items = [i if isinstance(i, dict) else {} for i in items]
+    if _doc_type(data.get("doc_type")) != "TAX":  # no GST is charged on a bill of supply or an estimate
+        items = [{**i, "gst_rate": "0"} for i in items]
     firm = Firm.get()
     try:
         mode = _price_mode(data.get("price_mode"))
@@ -129,6 +135,7 @@ def _clean_payload(data, firm):
 
     price_mode = _price_mode(data.get("price_mode"))
     amount_mode = price_mode == "AMT"
+    doc_type = _doc_type(data.get("doc_type"))
 
     allowed_rates = set(settings.GST_RATES)
     rows = data.get("items")
@@ -150,7 +157,7 @@ def _clean_payload(data, firm):
         qty = Decimal(1) if (amount_mode and qty_text == "") else D(qty_text)
         rate, amount = D(rate_text), D(amount_text)
         disc = Decimal(0) if amount_mode else D(r.get("discount_pct"))
-        gst = D(r.get("gst_rate"))
+        gst = D(r.get("gst_rate")) if doc_type == "TAX" else Decimal(0)  # only a tax invoice charges GST
         hsn, unit = str(r.get("hsn") or "").strip(), str(r.get("unit") or "").strip()
 
         if not desc:
@@ -217,6 +224,7 @@ def _clean_payload(data, firm):
         "submitted": submitted,
         "place_of_supply": place,
         "price_mode": price_mode,
+        "doc_type": doc_type,
         "notes": (data.get("notes") or "").strip(),
         "items": items,
         "result": result,
@@ -251,6 +259,10 @@ def invoice_save(request, pk=None):
     if was_issued and not c["submitted"]:
         return _err(["This bill has already been submitted and its invoice number is in use, so it cannot go back to \"not submitted\"."])
 
+    if was_issued and c["doc_type"] != invoice.doc_type:
+        return _err(["The type of a bill cannot be changed after it has been given an invoice number."])
+    prefix = doc_prefix(firm, c["doc_type"])
+
     number = c["invoice_no"]
     if was_issued and not number:
         number = invoice.invoice_no  # a blank field on an existing invoice keeps its number
@@ -273,7 +285,7 @@ def invoice_save(request, pk=None):
                 if not c["submitted"]:
                     inv.invoice_no = None
                 else:
-                    inv.invoice_no = number or Invoice.next_number(firm.invoice_prefix, c["date"])
+                    inv.invoice_no = number or Invoice.next_number(prefix, c["date"])
                 inv.date = c["date"]
                 inv.party = _resolve_party(c)
                 inv.party_name = c["party_name"]
@@ -284,6 +296,7 @@ def invoice_save(request, pk=None):
                 inv.party_email = c["party_email"]
                 inv.place_of_supply = c["place_of_supply"]
                 inv.price_mode = c["price_mode"]
+                inv.doc_type = c["doc_type"]
                 inv.is_intra_state = r["intra"]
                 inv.taxable_value = r["taxable"]
                 inv.cgst, inv.sgst, inv.igst = r["cgst"], r["sgst"], r["igst"]
@@ -317,9 +330,11 @@ def invoice_save(request, pk=None):
 
 
 # ---------------- invoice number helpers ----------------
-def _last_invoice(current=None):
-    """The most recently created invoice (other than the one being edited), for the hint under the number field."""
+def _last_invoice(current=None, doc_type=None):
+    """The most recently created bill of a type (other than the one being edited), for the hint under the number field."""
     qs = Invoice.objects.filter(invoice_no__isnull=False).order_by("-id")  # drafts have no number
+    if doc_type:
+        qs = qs.filter(doc_type=doc_type)
     if current is not None:
         qs = qs.exclude(pk=current.pk)
     last = qs.first()
@@ -355,6 +370,7 @@ def invoice_form(request, pk=None):
             "invoice_no": invoice.invoice_no or "",
             "date": invoice.date.isoformat(),
             "price_mode": invoice.price_mode,
+            "doc_type": invoice.doc_type,
             "party_name": invoice.party_name,
             "party_address": invoice.party_address,
             "party_gstin": invoice.party_gstin,
@@ -378,6 +394,7 @@ def invoice_form(request, pk=None):
             "invoice_no": Invoice.next_number(firm.invoice_prefix, today),
             "date": today.isoformat(),
             "price_mode": "AMT",
+            "doc_type": "TAX",
             "party_name": "", "party_address": "", "party_gstin": "", "party_state": "",
             "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "pending": False, "issued": False, "items": [],
         }
@@ -388,9 +405,10 @@ def invoice_form(request, pk=None):
         "new_url": reverse("invoice_new"),
         "check_url": reverse("check_number"),
         "invoice_id": invoice.pk if invoice else None,
-        "next_number": Invoice.next_number(firm.invoice_prefix, timezone.localdate()),
+        "next_numbers": {code: Invoice.next_number(doc_prefix(firm, code), timezone.localdate()) for code, _ in DOC_TYPES},
+        "doc_types": [{"value": code, "label": label} for code, label in DOC_TYPES],
         "today": timezone.localdate().isoformat(),
-        "last_invoice": _last_invoice(invoice),
+        "last_invoices": {code: _last_invoice(invoice, code) for code, _ in DOC_TYPES},
         "firm_state": firm.state,
         "state_codes": STATE_CODES,
         "gst_rates": [_plain(r) for r in settings.GST_RATES],
@@ -440,7 +458,7 @@ def invoice_submit(request, pk):
             try:
                 with transaction.atomic():
                     invoice.date = max(invoice.date, today)  # the invoice date is the day it is issued
-                    invoice.invoice_no = Invoice.next_number(firm.invoice_prefix, invoice.date)
+                    invoice.invoice_no = Invoice.next_number(doc_prefix(firm, invoice.doc_type), invoice.date)
                     invoice.submitted_on = today
                     invoice.save()
                 break
@@ -491,6 +509,9 @@ def invoice_print(request, pk):
             "words": amount_in_words(invoice.total),
             "inclusive": invoice.price_mode == "INCL",
             "summary": _stored_summary(invoice, invoice.items.all()),
+            "is_tax": invoice.doc_type == "TAX",
+            "doc_title": {"TAX": "Tax invoice", "SUPPLY": "Bill of supply", "EST": "Estimate"}[invoice.doc_type],
+            "number_label": {"TAX": "Invoice no.", "SUPPLY": "Bill no.", "EST": "Estimate no."}[invoice.doc_type],
         },
     )
 
@@ -505,8 +526,8 @@ def _report_for_year(request):
     except ValueError:
         start = fy_start_year(today)
     begin, end = datetime.date(start, 4, 1), datetime.date(start + 1, 3, 31)
-    issued = Invoice.objects.filter(invoice_no__isnull=False, date__gte=begin, date__lte=end)
-    invoices = list(issued.values("date", "party_name", "is_intra_state", "taxable_value", "cgst", "sgst", "igst", "round_off", "total"))
+    issued = Invoice.objects.filter(invoice_no__isnull=False, date__gte=begin, date__lte=end).exclude(doc_type="EST")  # estimates are not sales
+    invoices = list(issued.values("date", "party_name", "party_gstin", "doc_type", "is_intra_state", "taxable_value", "cgst", "sgst", "igst", "round_off", "total"))
     items = list(
         InvoiceItem.objects.filter(invoice__in=issued).values("gst_rate", "taxable", "gst_amount")
     )

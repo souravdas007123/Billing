@@ -29,7 +29,7 @@ def _empty_month(year, month):
 
 def build_report(invoices, items, start_year, today=None):
     """
-    invoices: iterable of dicts (date, party_name, is_intra_state, taxable_value, cgst, sgst, igst, round_off, total) of SUBMITTED bills.
+    invoices: iterable of dicts (date, party_name, party_gstin, doc_type, is_intra_state, taxable_value, cgst, sgst, igst, round_off, total) of SUBMITTED bills.
     items:    iterable of dicts (gst_rate, taxable, gst_amount) of the lines of those bills.
     Bills are counted in the month of their invoice date. Drafts are not part of any figure here.
     """
@@ -39,6 +39,9 @@ def build_report(invoices, items, start_year, today=None):
     parties = {}
     intra = {"bills": 0, "taxable": ZERO, "total": ZERO}
     inter = {"bills": 0, "taxable": ZERO, "total": ZERO}
+    registered = {"bills": 0, "taxable": ZERO, "total": ZERO}    # party has a GSTIN (B2B)
+    unregistered = {"bills": 0, "taxable": ZERO, "total": ZERO}  # party has no GSTIN (B2C)
+    by_type = {"TAX": {"bills": 0, "taxable": ZERO, "total": ZERO}, "SUPPLY": {"bills": 0, "taxable": ZERO, "total": ZERO}}
     for inv in invoices:
         row = index.get((inv["date"].year, inv["date"].month))
         if row is None:
@@ -56,10 +59,13 @@ def build_report(invoices, items, start_year, today=None):
         p = parties.setdefault(key, {"name": (inv["party_name"] or "").strip(), "bills": 0, "total": ZERO})
         p["bills"] += 1
         p["total"] += inv["total"]
-        bucket = intra if inv["is_intra_state"] else inter
-        bucket["bills"] += 1
-        bucket["taxable"] += inv["taxable_value"]
-        bucket["total"] += inv["total"]
+        buckets = [intra if inv["is_intra_state"] else inter, registered if (inv.get("party_gstin") or "").strip() else unregistered]
+        if inv.get("doc_type", "TAX") in by_type:
+            buckets.append(by_type[inv.get("doc_type", "TAX")])
+        for bucket in buckets:
+            bucket["bills"] += 1
+            bucket["taxable"] += inv["taxable_value"]
+            bucket["total"] += inv["total"]
 
     totals = _empty_month(start_year, 4)
     totals["label"] = "Total"
@@ -85,6 +91,7 @@ def build_report(invoices, items, start_year, today=None):
     best = max(months, key=lambda m: m["total"]) if grand else None
     return {
         "months": months, "totals": totals, "parties": top, "rates": rate_rows, "intra": intra, "inter": inter,
+        "registered": registered, "unregistered": unregistered, "by_type": by_type,
         "average_bill": (grand / totals["bills"]).quantize(Decimal("0.01")) if totals["bills"] else ZERO,
         "best_month": best["label"] if best else "",
     }

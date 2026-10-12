@@ -15,6 +15,7 @@
   #items .o { display:block; background:var(--calc); padding:6px 10px; border-radius:6px; text-align:right; white-space:nowrap; min-width:92px; font-variant-numeric:tabular-nums; }
   #items tr:hover td { background:rgba(255,255,255,.015); }
   #items_table.m-amt .for-rate, #items_table.m-rate .for-amt { display:none; }
+  body.no-gst .tax-only { display:none !important; }
   #items_table.t-intra .tx-inter, #items_table.t-inter .tx-intra { display:none; }
   #items .x { padding:2px 9px; color:var(--muted); border-color:transparent; background:transparent; font-size:13px; }
   #items .x:hover { color:var(--bad); background:var(--bad-bg); }
@@ -42,6 +43,10 @@
 <div class="grid2">
   <section class="card">
     <h3>{% if editing %}Edit invoice{% else %}Invoice details{% endif %}</h3>
+    <label>Document type
+      <select id="doc_type"></select>
+      <span class="hint" id="doc_hint" style="display:block"></span>
+    </label>
     <label>Invoice number
       <input id="invoice_no" maxlength="40" autocomplete="off">
       <span class="hint" style="display:block">Given automatically when the bill is submitted. You can change it.</span>
@@ -85,7 +90,7 @@
       </label>
       <label>Place of supply
         <select id="place_of_supply"></select>
-        <span id="gst_type" class="hint"></span>
+        <span id="gst_type" class="hint tax-only"></span>
       </label>
     </div>
   </section>
@@ -94,10 +99,10 @@
 <section class="card">
   <h3>Items</h3>
   <div class="toolbar">
-    <label>GST rate for all items
+    <label class="tax-only">GST rate for all items
       <select id="default_gst"></select>
     </label>
-    <button type="button" id="apply_all">Apply to all lines</button>
+    <button type="button" id="apply_all" class="tax-only">Apply to all lines</button>
     <label>Column order when pasting
       <select id="paste_map"></select>
     </label>
@@ -110,12 +115,12 @@
         <tr>
           <th>#</th><th>Item / description</th><th>HSN</th><th class="num">Qty</th><th>Unit</th>
           <th class="num for-rate">Rate</th>
-          <th class="num for-amt">Amount (incl. GST)</th>
+          <th class="num for-amt" id="th_amt">Amount (incl. GST)</th>
           <th class="num for-rate">Discount %</th>
-          <th>GST %</th>
-          <th class="num for-amt">Rate (excl. GST)</th>
-          <th class="num">Taxable value</th>
-          <th class="num tx-intra">CGST</th><th class="num tx-intra">SGST</th><th class="num tx-inter">IGST</th>
+          <th class="tax-only">GST %</th>
+          <th class="num for-amt" id="th_rate_ex">Rate (excl. GST)</th>
+          <th class="num tax-only">Taxable value</th>
+          <th class="num tx-intra tax-only">CGST</th><th class="num tx-intra tax-only">SGST</th><th class="num tx-inter tax-only">IGST</th>
           <th class="num for-rate">Amount</th><th></th>
         </tr>
       </thead>
@@ -134,15 +139,15 @@
   </section>
   <section class="card">
     <table class="tot">
-      <tr><td>Taxable value</td><td class="num" id="t_taxable">0.00</td></tr>
-      <tr id="row_cgst"><td>CGST</td><td class="num" id="t_cgst">0.00</td></tr>
-      <tr id="row_sgst"><td>SGST</td><td class="num" id="t_sgst">0.00</td></tr>
-      <tr id="row_igst" hidden><td>IGST</td><td class="num" id="t_igst">0.00</td></tr>
+      <tr><td id="lbl_taxable">Taxable value</td><td class="num" id="t_taxable">0.00</td></tr>
+      <tr id="row_cgst" class="tax-only"><td>CGST</td><td class="num" id="t_cgst">0.00</td></tr>
+      <tr id="row_sgst" class="tax-only"><td>SGST</td><td class="num" id="t_sgst">0.00</td></tr>
+      <tr id="row_igst" class="tax-only" hidden><td>IGST</td><td class="num" id="t_igst">0.00</td></tr>
       <tr><td>Round-off</td><td class="num" id="t_round">0.00</td></tr>
       <tr class="grand"><td>Total</td><td class="num" id="t_total">0.00</td></tr>
     </table>
     <div class="words" id="t_words"></div>
-    <div id="rate_sum" hidden>
+    <div id="rate_sum" class="tax-only" hidden>
       <div class="rs-title">Tax summary by GST rate</div>
       <table class="tot rs"><thead><tr id="rs_head"></tr></thead><tbody id="rs_body"></tbody></table>
     </div>
@@ -292,12 +297,12 @@
       '<td class="for-rate"><input data-f="rate" inputmode="decimal" class="num" style="width:96px"></td>' +
       '<td class="for-amt"><input data-f="amount" inputmode="decimal" class="num" style="width:110px"></td>' +
       '<td class="for-rate"><input data-f="discount_pct" inputmode="decimal" class="num" style="width:64px"></td>' +
-      '<td><select data-f="gst_rate" style="width:84px">' + rateOptions + '</select></td>' +
+      '<td class="tax-only"><select data-f="gst_rate" style="width:84px">' + rateOptions + '</select></td>' +
       '<td class="for-amt"><span class="o" data-o="rate">0.00</span></td>' +
-      '<td><span class="o" data-o="taxable">0.00</span></td>' +
-      '<td class="tx-intra"><span class="o" data-o="cgst">0.00</span></td>' +
-      '<td class="tx-intra"><span class="o" data-o="sgst">0.00</span></td>' +
-      '<td class="tx-inter"><span class="o" data-o="igst">0.00</span></td>' +
+      '<td class="tax-only"><span class="o" data-o="taxable">0.00</span></td>' +
+      '<td class="tx-intra tax-only"><span class="o" data-o="cgst">0.00</span></td>' +
+      '<td class="tx-intra tax-only"><span class="o" data-o="sgst">0.00</span></td>' +
+      '<td class="tx-inter tax-only"><span class="o" data-o="igst">0.00</span></td>' +
       '<td class="for-rate"><span class="o" data-o="total">0.00</span></td>' +
       '<td><button type="button" class="x" tabindex="-1" title="Remove line" aria-label="Remove line">&#10005;</button></td>';
     tbody.insertBefore(tr, afterTr ? afterTr.nextSibling : null);
@@ -311,6 +316,11 @@
     if (v.gst_rate != null && v.gst_rate !== '') { set(tr, 'gst_rate', v.gst_rate); tr.dataset.manualGst = '1'; }
     else set(tr, 'gst_rate', $('default_gst').value);
     renumber();
+    if (!isTax()) {  // no GST on this type of bill; remember the rate to bring back if the type changes to Tax invoice
+      const cur = get(tr, 'gst_rate');
+      tr.dataset.prevGst = cur && cur !== '0' ? cur : $('default_gst').value;
+      set(tr, 'gst_rate', '0');
+    }
     return tr;
   }
 
@@ -465,6 +475,7 @@
       invoice_no: $('invoice_no').value,
       date: $('date').value,
       price_mode: $('price_mode').value,
+      doc_type: $('doc_type').value,
       party_name: $('party_name').value,
       party_address: $('party_address').value,
       party_gstin: $('party_gstin').value,
@@ -485,7 +496,7 @@
     const seq = ++calcSeq;
     const d = collect();
     try {
-      const r = await post(INIT.calc_url, { price_mode: d.price_mode, place_of_supply: d.place_of_supply, items: d.items });
+      const r = await post(INIT.calc_url, { price_mode: d.price_mode, doc_type: d.doc_type, place_of_supply: d.place_of_supply, items: d.items });
       const j = await r.json();
       if (seq !== calcSeq) return;
       if (!j.ok) { $('calc_status').textContent = (j.errors || ['Could not calculate the totals.']).join(' '); return; }
@@ -530,8 +541,12 @@
   }
 
   // ---------- invoice number: last invoice and a live duplicate check ----------
-  const last = INIT.last_invoice;
-  $('last_invoice').textContent = last ? 'Last invoice: ' + last.no + ' (' + last.date + ', ' + last.party + ')' : 'No invoices have been created yet.';
+  const docType = () => $('doc_type').value;
+  const isTax = () => docType() === 'TAX';
+  function showLastInvoice() {
+    const last = (INIT.last_invoices || {})[docType()];
+    $('last_invoice').textContent = last ? 'Last in this series: ' + last.no + ' (' + last.date + ', ' + last.party + ')' : 'No bill of this type has been created yet.';
+  }
   let noTimer = null, noSeq = 0;
   function checkNumber() {
     const no = $('invoice_no').value.trim();
@@ -546,6 +561,35 @@
     }).catch(() => { if (seq === noSeq) out.textContent = ''; });
   }
   $('invoice_no').addEventListener('input', () => { clearTimeout(noTimer); noTimer = setTimeout(checkNumber, 300); });
+
+  // ---------- document type: tax invoice / bill of supply / estimate ----------
+  const DOC_HINTS = {
+    TAX: '',
+    SUPPLY: 'No GST is charged. The bill is printed as a Bill of Supply and has its own number series.',
+    EST: 'No GST. This is not a tax document: it is not part of the invoice series or the GST figures on the dashboard.',
+  };
+  INIT.doc_types.forEach(t => $('doc_type').add(new Option(t.label, t.value)));
+  function applyDocType(initial) {
+    const tax = isTax();
+    document.body.classList.toggle('no-gst', !tax);
+    $('doc_hint').textContent = DOC_HINTS[docType()] || '';
+    $('doc_hint').className = 'hint';
+    allRows().forEach(tr => {
+      const sel = tr.querySelector('[data-f="gst_rate"]');
+      if (!tax) { if (tr.dataset.prevGst === undefined) tr.dataset.prevGst = sel.value; set(tr, 'gst_rate', '0'); }
+      else if (tr.dataset.prevGst !== undefined) { set(tr, 'gst_rate', tr.dataset.prevGst); delete tr.dataset.prevGst; }
+    });
+    $('th_amt').textContent = tax ? 'Amount (incl. GST)' : 'Amount';
+    $('th_rate_ex').textContent = tax ? 'Rate (excl. GST)' : 'Rate';
+    $('lbl_taxable').textContent = tax ? 'Taxable value' : 'Sub-total';
+    showLastInvoice();
+    const box = $('invoice_no');
+    const auto = Object.values(INIT.next_numbers);
+    if (savedNo && auto.includes(savedNo)) savedNo = '';  // an automatic number of the old type is not kept
+    if (!box.disabled && (!box.value.trim() || auto.includes(box.value.trim()))) box.value = INIT.next_numbers[docType()];
+    if (!initial) { scheduleCalc(); checkNumber(); }
+  }
+  $('doc_type').addEventListener('change', () => applyDocType(false));
 
   // ---------- a bill that is not submitted yet has no invoice number ----------
   let savedNo = '';
@@ -563,7 +607,7 @@
     } else {
       box.disabled = false;
       box.placeholder = '';
-      if (!box.value.trim()) box.value = savedNo || INIT.next_number;
+      if (!box.value.trim()) box.value = savedNo || INIT.next_numbers[docType()];
       if (!initial && wasDraft && $('date').value < INIT.today) $('date').value = INIT.today;  // the invoice date is the day it is issued
       $('no_check').textContent = '';
       if (!initial) checkNumber();
@@ -610,6 +654,7 @@
   $('invoice_no').value = inv.invoice_no;
   $('date').value = inv.date;
   $('price_mode').value = inv.price_mode;
+  $('doc_type').value = inv.doc_type || 'TAX';
   applyMode();
   $('party_name').value = inv.party_name;
   $('party_address').value = inv.party_address;
@@ -622,9 +667,11 @@
   $('notes').value = inv.notes;
   $('pending').checked = !!inv.pending;
   if (inv.issued) $('pending').closest('label').hidden = true;  // a numbered bill cannot go back to draft
+  if (inv.issued) $('doc_type').disabled = true;  // the type cannot change once the bill has a number
   applyPending(true);
   gstinHint();
   if (inv.items.length) inv.items.forEach(it => addRow(it)); else addRow();
+  applyDocType(true);
   dirty = false;
   calc();
   (inv.party_name ? tbody.querySelector('[data-f="description"]') : $('party_name')).focus();

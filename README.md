@@ -56,6 +56,15 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
   totals on the billing screen and on the printed invoice. Its columns always add up to the invoice totals.
 - **Unit** is a drop-down (list in `config/settings.py` -> `UNITS`; a unit that comes from pasted rows or a product is added
   automatically). On the printed invoice an empty discount shows `-` and GST / discount values carry a `%` sign.
+- **Document type** (top of the billing screen):
+  - *Tax invoice*: the normal GST bill. If the party has no GSTIN, leave the field empty: the bill is issued to an
+    unregistered party and prints "GSTIN: Unregistered". The dashboard shows registered (B2B) and unregistered (B2C) sales.
+  - *Bill of supply (no GST)*: for a composition dealer or exempt goods. No GST columns, printed as "BILL OF SUPPLY",
+    numbers `BOS/26-27/0001`. It counts as a sale on the dashboard (taxable value, 0 GST).
+  - *Estimate*: not a tax document. Printed as "ESTIMATE", numbers `EST/26-27/0001`, and left out of every dashboard figure.
+  Each type has its own number series, so the tax invoice series never has gaps. The type can be changed while a bill is
+  a draft; once it has a number it is fixed. For a composition dealer, add the legally required wording (for example
+  "Composition taxable person, not eligible to collect tax on supplies") to the Terms in Admin -> Firm.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated
