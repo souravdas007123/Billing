@@ -185,7 +185,7 @@ class BillingViewTests(TestCase):
         self.assertFalse(self.client.get(url, {"no": "T-1", "exclude": inv_id}).json()["exists"])
 
     def test_form_shows_the_last_invoice(self):
-        self.assertIsNone(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"])
+        self.assertIsNone(self.client.get(reverse("invoice_new")).context["init"]["last_invoices"]["TAX"])
         self.save(payload(invoice_no="T-1"))
         self.save(payload(invoice_no="T-2"))
         self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoices"]["TAX"]["no"], "T-2")
