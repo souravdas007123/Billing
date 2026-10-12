@@ -41,25 +41,33 @@
   a:hover { text-decoration: underline; }
 
   header.top {
-    background: var(--surface);
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(26, 32, 43, .92); backdrop-filter: blur(8px);
     border-bottom: 1px solid var(--line);
-    padding: 0 20px;
-    display: flex;
-    align-items: stretch;
-    gap: 4px;
-    height: 52px;
   }
-  header.top .brand { display: flex; align-items: center; margin-right: 18px; font-weight: 700; letter-spacing: .2px; color: var(--ink); }
+  header.top .bar { max-width: 1280px; margin: 0 auto; padding: 0 20px; height: 58px; display: flex; align-items: center; gap: 8px; }
+  header.top .brand { display: flex; align-items: center; gap: 10px; margin-right: 18px; font-weight: 700; font-size: 15px; letter-spacing: .2px; color: var(--ink); }
   header.top .brand:hover { text-decoration: none; }
-  header.top nav { display: flex; align-items: stretch; gap: 2px; }
-  header.top nav a {
-    display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-weight: 600;
-    border-bottom: 2px solid transparent;
+  header.top .logo {
+    width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-size: 16px; font-weight: 700;
+    background: linear-gradient(135deg, #4a8bd0, #2f64a3); color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,.18) inset;
   }
-  header.top nav a:hover { color: var(--ink); text-decoration: none; }
-  header.top nav a.active { color: var(--ink); border-bottom-color: var(--accent); }
+  header.top nav { display: flex; align-items: center; gap: 4px; }
+  header.top nav a.tab {
+    display: flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 8px;
+    color: var(--muted); font-weight: 600; transition: background .12s, color .12s;
+  }
+  header.top nav a.tab svg { width: 17px; height: 17px; flex: none; opacity: .85; }
+  header.top nav a.tab:hover { color: var(--ink); background: rgba(255, 255, 255, .05); text-decoration: none; }
+  header.top nav a.tab.active { color: var(--ink); background: var(--raised); box-shadow: 0 0 0 1px var(--line) inset; }
+  header.top nav a.tab.active svg { color: var(--accent); opacity: 1; }
   header.top .sp { flex: 1; }
-  header.top .who { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  header.top .new { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; }
+  header.top .new svg { width: 15px; height: 15px; }
+  header.top .new.active { box-shadow: 0 0 0 2px rgba(127, 177, 224, .45); }
+  header.top .who { display: flex; align-items: center; gap: 10px; margin-left: 8px; padding-left: 14px; border-left: 1px solid var(--line); color: var(--muted); }
+  header.top .avatar { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--raised); border: 1px solid var(--line); color: var(--ink); font-weight: 700; font-size: 12px; }
+  header.top .who button { padding: 5px 11px; font-size: 13px; font-weight: 600; background: transparent; }
   header.top form { margin: 0; }
 
   main { max-width: 1280px; margin: 0 auto; padding: 20px; }
@@ -97,9 +105,16 @@
   .badge.ok { color: var(--ok); border-color: rgba(130, 208, 166, .4); background: rgba(130, 208, 166, .08); }
   .badge.wait { color: var(--wait); border-color: rgba(232, 195, 106, .45); background: rgba(232, 195, 106, .08); }
 
+  @media (max-width: 860px) {
+    header.top .uname { display: none; }
+  }
   @media (max-width: 720px) {
-    header.top { flex-wrap: wrap; height: auto; padding: 6px 12px; }
-    header.top .sp { display: none; }
+    header.top .bar { height: auto; flex-wrap: wrap; padding: 8px 12px; row-gap: 8px; }
+    header.top .brand { margin-right: 0; }
+    header.top .sp { flex: 1; }
+    header.top nav { order: 3; width: 100%; overflow-x: auto; }
+    header.top nav a.tab { padding: 7px 11px; white-space: nowrap; }
+    header.top .who { margin-left: 0; padding-left: 10px; }
     main { padding: 14px 12px; }
   }
   @media print {
@@ -112,20 +127,25 @@
 <body>
 {% if user.is_authenticated %}
 {% with page=request.resolver_match.url_name %}
-<header class="top">
-  <a class="brand" href="{% url 'invoice_new' %}">Billing</a>
-  <nav>
-    <a href="{% url 'invoice_new' %}"{% if page == 'invoice_new' or page == 'invoice_edit' %} class="active"{% endif %}>New invoice</a>
-    <a href="{% url 'dashboard' %}"{% if page == 'dashboard' %} class="active"{% endif %}>Dashboard</a>
-    <a href="{% url 'invoice_list' %}"{% if page == 'invoice_list' or page == 'invoice_print' %} class="active"{% endif %}>All invoices</a>
-    <a href="{% url 'admin:index' %}">Admin</a>
+<header class="top"><div class="bar">
+  <a class="brand" href="{% url 'invoice_new' %}"><span class="logo" aria-hidden="true">&#8377;</span><span>Billing</span></a>
+  <nav aria-label="Main">
+    <a class="tab{% if page == 'dashboard' %} active{% endif %}" href="{% url 'dashboard' %}"{% if page == 'dashboard' %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Dashboard</a>
+    <a class="tab{% if page == 'invoice_list' or page == 'invoice_print' %} active{% endif %}" href="{% url 'invoice_list' %}"{% if page == 'invoice_list' or page == 'invoice_print' %} aria-current="page"{% endif %}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>All invoices</a>
+    <a class="tab" href="{% url 'admin:index' %}">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Admin</a>
   </nav>
   <span class="sp"></span>
+  <a class="btn primary new{% if page == 'invoice_new' or page == 'invoice_edit' %} active{% endif %}" href="{% url 'invoice_new' %}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>New invoice</a>
   <div class="who">
-    <span>{{ user.get_username }}</span>
+    <span class="avatar" aria-hidden="true">{{ user.get_username|first|upper }}</span>
+    <span class="uname">{{ user.get_username }}</span>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>
   </div>
-</header>
+</div></header>
 {% endwith %}
 {% endif %}
 <main>{% block content %}{% endblock %}</main>
