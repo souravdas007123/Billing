@@ -79,6 +79,15 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - Invalid entries (quantity 0, a missing rate or amount, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
 - The GSTIN checksum is verified (it shows a warning but does not block saving).
 
+## Importing many parties at once
+
+Admin -> Parties -> **Import parties**. Upload an Excel (.xlsx) or CSV file, or copy the rows in Excel (with the heading
+row) and paste them into the box. Headings such as `name, address, gstin, state, phone, email` are understood (also
+"Party Name", "GST No", "Mobile" and similar); only *name* is required. A preview shows what will be added, skipped or has
+a problem, and nothing is saved until you press the import button. A party that already exists (same name) is skipped, or
+updated with the filled cells only (an empty cell never erases saved details). A blank state is taken from the GSTIN.
+Reading .xlsx files needs `openpyxl` (`pip install -r requirements.txt`).
+
 ## Changing the GST rates
 
 Edit `GST_RATES` and `DEFAULT_GST_RATE` in `config/settings.py`. Use the rates your accountant confirms.
@@ -91,7 +100,7 @@ All data is stored in the `db.sqlite3` file, which is not tracked by git. Copy i
 
 ```bash
 python manage.py test                 # everything
-python -m unittest billing.test_calc  # only the calculation tests (no Django needed)
+python -m unittest billing.test_calc billing.test_reports billing.test_importer  # only the calculation tests (no Django needed)
 ```
 
 ## Running in production

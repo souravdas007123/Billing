@@ -1,0 +1,59 @@
+{% extends "admin/base_site.html" %}
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+  <a href="{% url 'admin:index' %}">Home</a> &rsaquo; <a href="{% url 'admin:app_list' 'billing' %}">Billing</a> &rsaquo;
+  <a href="{% url 'admin:billing_party_changelist' %}">Parties</a> &rsaquo; Import
+</div>
+{% endblock %}
+{% block content %}
+<div id="content-main">
+{% if error %}<p class="errornote">{{ error }}</p>{% endif %}
+
+{% if preview %}
+  <div class="module" style="padding:12px 16px">
+    <h2>Check before importing</h2>
+    <p><b>{{ counts.new }}</b> new &middot; <b>{{ counts.exists }}</b> already exist
+      ({% if mode == "update" %}will be updated with the filled cells{% else %}will be skipped{% endif %}) &middot;
+      <b>{{ counts.error }}</b> with a problem (not imported) &middot; <b>{{ warned }}</b> with a warning (imported anyway).</p>
+    <form method="post" style="display:inline">{% csrf_token %}
+      <input type="hidden" name="confirm" value="1">
+      <input type="submit" class="default" value="Import {{ counts.new }}{% if mode == 'update' and counts.exists %} + update {{ counts.exists }}{% endif %} parties">
+    </form>
+    <a href="{% url 'admin:billing_party_import' %}" style="margin-left:12px">Start again</a>
+  </div>
+  <div class="module">
+    <table style="width:100%">
+      <thead><tr><th>Row</th><th>Status</th><th>Name</th><th>GSTIN</th><th>State</th><th>Phone</th><th>Email</th><th>Notes</th></tr></thead>
+      <tbody>
+      {% for p in parties %}
+        <tr>
+          <td>{{ p.row }}</td>
+          <td>{% if p.status == "new" %}New{% elif p.status == "exists" %}{% if mode == "update" %}Update{% else %}Skip{% endif %}{% else %}<b style="color:#ba2121">Error</b>{% endif %}</td>
+          <td>{{ p.name }}</td><td>{{ p.gstin }}</td><td>{{ p.state }}</td><td>{{ p.phone }}</td><td>{{ p.email }}</td>
+          <td>{% if p.error %}<span style="color:#ba2121">{{ p.error }}</span>{% endif %}{% for w in p.warnings %}<div style="color:#a05a00">{{ w }}</div>{% endfor %}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% if total > 300 %}<p style="padding:8px 12px">Showing the first 300 of {{ total }} rows. All valid rows are imported.</p>{% endif %}
+  </div>
+{% else %}
+  <div class="module" style="padding:12px 16px">
+    <h2>Import parties</h2>
+    <p>Upload an Excel (.xlsx) or CSV file, <b>or</b> copy the rows in Excel (with the heading row) and paste them below.
+      The first row must have headings like <code>name, address, gstin, state, phone, email</code>
+      (only <b>name</b> is required; names such as "Party Name", "GST No" or "Mobile" are understood too).
+      <a href="{% url 'admin:billing_party_import_sample' %}">Download a sample file</a></p>
+    <form method="post" enctype="multipart/form-data">{% csrf_token %}
+      <p><label for="file"><b>File:</b></label> <input type="file" id="file" name="file" accept=".xlsx,.csv,.txt,.tsv"></p>
+      <p><label for="pasted"><b>Or paste rows from Excel:</b></label><br>
+        <textarea id="pasted" name="pasted" rows="8" style="width:100%;max-width:900px" placeholder="name&#9;address&#9;gstin&#9;state&#9;phone&#9;email"></textarea></p>
+      <p><b>If a party with the same name already exists:</b><br>
+        <label><input type="radio" name="mode" value="skip"{% if mode != "update" %} checked{% endif %}> Skip it</label><br>
+        <label><input type="radio" name="mode" value="update"{% if mode == "update" %} checked{% endif %}> Update it with the filled cells (empty cells never erase saved details)</label></p>
+      <input type="submit" class="default" value="Check the file">
+    </form>
+  </div>
+{% endif %}
+</div>
+{% endblock %}

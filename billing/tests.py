@@ -2,6 +2,7 @@ import datetime
 import json
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
@@ -387,3 +388,49 @@ class InvoiceNumberTests(TestCase):
     def test_manual_numbers_outside_series_do_not_break_it(self):
         Invoice.objects.create(invoice_no="CUSTOM-9", party_name="A")
         self.assertEqual(Invoice.next_number("INV", datetime.date(2026, 10, 12)), "INV/26-27/0001")
+
+
+class PartyImportTests(TestCase):
+    def setUp(self):
+        get_user_model().objects.create_superuser("root", password="p")
+        self.client.login(username="root", password="p")
+        self.url = reverse("admin:billing_party_import")
+
+    def upload(self, text, **extra):
+        return self.client.post(self.url, {"file": SimpleUploadedFile("parties.csv", text.encode()), **extra})
+
+    def test_admin_list_has_the_import_button(self):
+        self.assertContains(self.client.get(reverse("admin:billing_party_changelist")), "Import parties")
+        self.assertEqual(self.client.get(self.url).status_code, 200)
+        self.assertEqual(self.client.get(reverse("admin:billing_party_import_sample")).status_code, 200)
+
+    def test_upload_preview_then_confirm(self):
+        r = self.upload("name,gstin,phone\nAlpha,19AABAB6861E1ZS,111\nBeta,,222\n,,333\n")
+        self.assertEqual(r.context["counts"], {"new": 2, "exists": 0, "error": 1})
+        self.assertEqual(Party.objects.count(), 0)  # nothing is saved before the confirmation
+        r = self.client.post(self.url, {"confirm": "1"}, follow=True)
+        self.assertEqual(Party.objects.count(), 2)
+        self.assertEqual(Party.objects.get(name="Alpha").state, "West Bengal")  # taken from the GSTIN
+        self.assertContains(r, "2 added")
+
+    def test_existing_parties_are_skipped_or_updated_without_erasing(self):
+        Party.objects.create(name="Alpha", phone="111", email="a@x.com")
+        self.upload("name,phone,email\nalpha,999,\n")
+        self.client.post(self.url, {"confirm": "1"})
+        self.assertEqual(Party.objects.get(name="Alpha").phone, "111")  # skipped
+        self.upload("name,phone,email\nalpha,999,\n", mode="update")
+        self.client.post(self.url, {"confirm": "1"})
+        a = Party.objects.get(name="Alpha")
+        self.assertEqual((a.phone, a.email), ("999", "a@x.com"))        # the empty email did not erase the saved one
+        self.assertEqual(Party.objects.count(), 1)
+
+    def test_pasted_rows_and_errors(self):
+        r = self.client.post(self.url, {"pasted": "name\tphone\nGamma\t5\n"})
+        self.assertEqual(r.context["counts"]["new"], 1)
+        r = self.upload("foo,bar\n1,2\n")
+        self.assertIn("name", r.context["error"])
+        self.assertEqual(self.client.post(self.url, {"confirm": "1"}, follow=True).status_code, 200)  # no preview: back to the form
+
+    def test_import_needs_a_login(self):
+        self.client.logout()
+        self.assertEqual(self.client.get(self.url).status_code, 302)
