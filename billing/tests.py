@@ -245,7 +245,7 @@ class BillingViewTests(TestCase):
         draft_id = self.save(payload(submitted=False)).json()["id"]
         r = self.client.get(reverse("invoice_list"), {"status": "pending"})
         self.assertEqual([i.pk for i in r.context["invoices"]], [draft_id])
-        self.assertEqual(dict(r.context["counts"]), {"all": 2, "pending": 1, "submitted": 1})
+        self.assertEqual(dict(r.context["counts"]), {"all": 2, "pending": 1, "submitted": 1, "cancelled": 0})
         r = self.client.get(reverse("invoice_list"), {"status": "submitted"})
         self.assertEqual([i.invoice_no for i in r.context["invoices"]], ["T-1"])
 
@@ -378,7 +378,7 @@ class BillingViewTests(TestCase):
 
     # ---------- cancel, credit note, copy ----------
     def issue(self, **over):
-        r = self.save(payload(invoice_no="", submitted=True, **over))
+        r = self.save(payload(**{"invoice_no": "", "submitted": True, **over}))
         self.assertEqual(r.status_code, 200, r.content)
         return Invoice.objects.get(pk=r.json()["id"])
 
