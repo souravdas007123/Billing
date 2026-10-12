@@ -9,6 +9,7 @@ urlpatterns = [
     path("gst/", views.gst_reports, name="gst_reports"),
     path("gst/export/<str:kind>/", views.gst_export, name="gst_export"),
     path("statement/", views.party_statement, name="party_statement"),
+    path("backup/", views.backup_download, name="backup_download"),
     path("new/", views.invoice_form, name="invoice_new"),
     path("<int:pk>/edit/", views.invoice_form, name="invoice_edit"),
     path("save/", views.invoice_save, name="invoice_save"),

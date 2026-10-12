@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Firm, Invoice, Party
+from .models import AuditLog, Firm, Invoice, Party
 
 
 def payload(**over):
@@ -461,6 +461,17 @@ class BillingViewTests(TestCase):
         csv_resp = self.client.get(reverse("party_statement") + "?party=Alpha Traders&fy=2026&csv=1")
         self.assertIn("text/csv", csv_resp["Content-Type"])
         self.assertEqual(self.client.get(reverse("party_statement")).status_code, 200)
+
+    def test_audit_log_records_actions(self):
+        inv = self.issue()
+        get_user_model().objects.filter(username="u").update(is_superuser=True)
+        self.client.post(reverse("invoice_cancel", args=[inv.pk]), {"reason": "typo"})
+        actions = list(AuditLog.objects.order_by("id").values_list("action", "doc_no", "user_name"))
+        self.assertEqual(actions[0][0], "Created")
+        self.assertEqual(actions[-1], ("Cancelled", inv.invoice_no, "u"))
+
+    def test_backup_download_is_superuser_only(self):
+        self.assertEqual(self.client.get(reverse("backup_download")).status_code, 403)
 
 
 class InvoiceNumberTests(TestCase):

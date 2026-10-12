@@ -17,6 +17,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
+from . import audit
 from .gst_returns import b2b_rows, b2c_rows, hsn_rows, series_summary
 from .reports import MONTH_NAMES as MONTH_LABELS, build_report, fy_label, fy_months, fy_start_year
 from .models import DOC_TYPES, GST_DOC_TYPES, STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product, doc_prefix
@@ -293,6 +294,7 @@ def invoice_save(request, pk=None):
     auto_number = c["submitted"] and not number
     attempts = 3 if auto_number else 1
     r = c["result"]
+    old_total = invoice.total if invoice is not None else None
     for attempt in range(attempts):
         try:
             with transaction.atomic():
@@ -342,6 +344,9 @@ def invoice_save(request, pk=None):
             if attempt == attempts - 1:
                 return _err(["Could not assign an invoice number. Please try again."] if auto_number else dup_msg)
 
+    what = "Created" if old_total is None else "Edited"
+    detail = f"{inv.get_doc_type_display()}, {inv.party_name}, total {inv.total}" + (f" (was {old_total})" if old_total is not None and old_total != inv.total else "")
+    audit.record(request, what if inv.invoice_no else what + " draft", inv.invoice_no or "", detail)
     return JsonResponse({"ok": True, "id": inv.pk, "print_url": reverse("invoice_print", args=[inv.pk])})
 
 
@@ -521,6 +526,7 @@ def invoice_submit(request, pk):
                     invoice.invoice_no = Invoice.next_number(doc_prefix(firm, invoice.doc_type), invoice.date)
                     invoice.submitted_on = today
                     invoice.save()
+                audit.record(request, "Submitted", invoice.invoice_no, f"{invoice.party_name}, total {invoice.total}")
                 break
             except IntegrityError:  # another bill took this number a moment ago: try the next one
                 invoice.invoice_no = None
@@ -550,6 +556,7 @@ def invoice_cancel(request, pk):
         invoice.cancelled_on = timezone.localdate()
         invoice.cancel_reason = reason[:200]
         invoice.save()
+        audit.record(request, "Cancelled", invoice.invoice_no, f"{invoice.party_name}, total {invoice.total}. Reason: {invoice.cancel_reason}")
         messages.success(request, f"{invoice.invoice_no} is cancelled. Its number stays in the series.")
     return redirect("invoice_print", pk=invoice.pk)
 
@@ -562,6 +569,7 @@ def invoice_delete_draft(request, pk):
     if invoice.invoice_no is not None:
         messages.error(request, "A bill with a number cannot be deleted. Cancel it instead.")
         return redirect("invoice_print", pk=invoice.pk)
+    audit.record(request, "Deleted draft", "", f"{invoice.get_doc_type_display()}, {invoice.party_name}, total {invoice.total}")
     invoice.delete()
     messages.success(request, "The draft has been deleted.")
     return redirect("invoice_list")
@@ -777,3 +785,22 @@ def party_statement(request):
         "fy": start, "fy_label": fy_label(start),
         "fy_options": [{"value": y, "label": fy_label(y)} for y in range(fy_start_year(timezone.localdate()) + 1, fy_start_year(timezone.localdate()) - 6, -1)],
     })
+
+
+@login_required
+def backup_download(request):
+    """A fresh, consistent copy of the database for superusers (for the office computer's own backup routine)."""
+    from django.http import FileResponse
+    import tempfile
+    from .backup import snapshot
+    db = settings.DATABASES["default"]
+    if not request.user.is_superuser:
+        return HttpResponseForbidden("Only a superuser can download a backup.")
+    if not db["ENGINE"].endswith("sqlite3"):
+        return HttpResponseForbidden("Backups are only built in for SQLite.")
+    tmp = tempfile.NamedTemporaryFile(suffix=".sqlite3", delete=False)
+    tmp.close()
+    snapshot(db["NAME"], tmp.name)
+    audit.record(request, "Downloaded backup")
+    stamp = timezone.localtime().strftime("%Y-%m-%d-%H%M")
+    return FileResponse(open(tmp.name, "rb"), as_attachment=True, filename=f"billing-backup-{stamp}.sqlite3")

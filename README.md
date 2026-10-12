@@ -111,9 +111,17 @@ Reading .xlsx files needs `openpyxl` (`pip install -r requirements.txt`).
 
 Edit `GST_RATES` and `DEFAULT_GST_RATE` in `config/settings.py`. Use the rates your accountant confirms.
 
-## Backups
+## Backups and audit log
 
-All data is stored in the `db.sqlite3` file, which is not tracked by git. Copy it to another location every day.
+- The database is copied automatically **once a day** (on the first page opened that day) to the `backups/` folder; the
+  newest 30 copies are kept (`BACKUP_DIR`, `BACKUP_KEEP` in `config/settings.py`, or the `BILLING_BACKUP_DIR` environment
+  variable). Point it to another disk or a synced folder if you can. `python manage.py backup --now` makes a fresh copy.
+- A superuser sees a **Backup** button in the top bar that downloads the whole database as one file.
+- The database runs in SQLite WAL mode, so recent changes can sit in `db.sqlite3-wal`. Do not copy `db.sqlite3` alone
+  while the app is running; use the backups above (or stop the app first).
+- To restore, stop the app, copy a backup over `db.sqlite3` (delete any `db.sqlite3-wal` / `-shm` files) and start it again.
+- **Audit log** (Admin -> Audit logs, read-only): every create, edit (with the old and new total), submit, cancel, draft
+  delete, party import and backup download, with the user and time.
 
 ## Tests
 

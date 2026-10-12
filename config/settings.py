@@ -27,6 +27,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "billing.middleware.DailyBackupMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -79,3 +80,10 @@ UNITS = [
 ]
 GST_RATES = [Decimal(x) for x in ("0", "3", "5", "12", "18", "28", "40")]
 DEFAULT_GST_RATE = Decimal("18")
+
+# ---- Backups ----
+# The database is copied once a day (on the first request) to BACKUP_DIR and the newest BACKUP_KEEP copies are kept.
+# Keep this folder on another disk or a synced folder if you can. Superusers can also download a backup from the app.
+BACKUP_ENABLED = True
+BACKUP_DIR = Path(os.environ.get("BILLING_BACKUP_DIR", BASE_DIR / "backups"))
+BACKUP_KEEP = 30

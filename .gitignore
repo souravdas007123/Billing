@@ -10,6 +10,9 @@ env/
 # Local database (har computer ka apna data)
 db.sqlite3
 db.sqlite3-journal
+db.sqlite3-wal
+db.sqlite3-shm
+backups/
 
 # OS / editor
 .DS_Store

@@ -7,7 +7,7 @@ from django.template.response import TemplateResponse
 from django.urls import path, reverse
 
 from .importer import MAX_BYTES, SAMPLE_CSV, ImportFileError, build_parties, read_csv_text, read_table
-from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
+from .models import STATE_CODES, AuditLog, Firm, Invoice, InvoiceItem, Party, Product
 
 
 @admin.register(Firm)
@@ -96,6 +96,8 @@ class PartyAdmin(admin.ModelAdmin):
                     updated += 1
                 else:
                     skipped += 1
+        from . import audit
+        audit.record(request, "Imported parties", "", f"{created} added, {updated} updated, {skipped} skipped")
         self.message_user(
             request, f"Import finished: {created} added, {updated} updated, {skipped} skipped (already existed).", messages.SUCCESS
         )
@@ -134,3 +136,21 @@ class InvoiceAdmin(admin.ModelAdmin):
         if obj is not None and obj.invoice_no:
             return False
         return super().has_delete_permission(request, obj)
+
+
+@admin.register(AuditLog)
+class AuditLogAdmin(admin.ModelAdmin):
+    """A read-only history of who created, edited, submitted, cancelled or deleted what."""
+    list_display = ("at", "user_name", "action", "doc_no", "detail")
+    list_filter = ("action", "user_name")
+    search_fields = ("doc_no", "detail", "user_name")
+    date_hierarchy = "at"
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

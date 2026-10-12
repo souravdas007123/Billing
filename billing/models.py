@@ -212,3 +212,18 @@ class InvoiceItem(models.Model):
 
     def __str__(self):
         return f"{self.invoice.invoice_no} #{self.sr} {self.description}"
+
+
+class AuditLog(models.Model):
+    """Who did what and when. Written by the app only; it cannot be edited or deleted in the admin site."""
+    at = models.DateTimeField(default=timezone.now, db_index=True)
+    user_name = models.CharField(max_length=150, blank=True)
+    action = models.CharField(max_length=40)
+    doc_no = models.CharField("Bill", max_length=40, blank=True)
+    detail = models.CharField(max_length=300, blank=True)
+
+    class Meta:
+        ordering = ["-at", "-id"]
+
+    def __str__(self):
+        return f"{self.at:%d-%m-%Y %H:%M} {self.user_name} {self.action} {self.doc_no}"

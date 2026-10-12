@@ -151,6 +151,7 @@
   <div class="who">
     <span class="avatar" aria-hidden="true">{{ user.get_username|first|upper }}</span>
     <span class="uname">{{ user.get_username }}</span>
+    {% if user.is_superuser %}<a class="btn" href="{% url 'backup_download' %}" title="Download a copy of the whole database">Backup</a>{% endif %}
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>
   </div>
 </div></header>
