@@ -12,7 +12,7 @@ def payload(**over):
     base = {
         "invoice_no": "T-1", "date": "2026-10-12", "price_mode": "EXCL",
         "party_name": "Alpha Traders", "party_address": "Kolkata", "party_gstin": "",
-        "party_state": "West Bengal", "party_phone": "", "place_of_supply": "West Bengal", "notes": "",
+        "party_state": "West Bengal", "party_phone": "", "party_email": "", "place_of_supply": "West Bengal", "notes": "",
         "items": [
             {"description": "Item", "hsn": "", "qty": "2", "unit": "Nos", "rate": "1000",
              "discount_pct": "", "gst_rate": "18"},
@@ -142,6 +142,23 @@ class BillingViewTests(TestCase):
         line = data["lines"][0]
         self.assertEqual((line["rate"], line["taxable"], line["gst"], line["total"]), ("250.00", "1000.00", "180.00", "1180.00"))
         self.assertEqual(data["total"], "1180.00")
+
+
+    def test_party_email_is_saved_on_invoice_and_new_party(self):
+        r = self.save(payload(party_email="accounts@alpha.example"))
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(Invoice.objects.get().party_email, "accounts@alpha.example")
+        self.assertEqual(Party.objects.get(name="Alpha Traders").email, "accounts@alpha.example")
+
+    def test_invalid_party_email_rejected(self):
+        for bad in ("not-an-email", "a@b", "a b@c.com"):
+            self.assertEqual(self.save(payload(party_email=bad)).status_code, 400, bad)
+        self.assertEqual(Invoice.objects.count(), 0)
+
+    def test_party_email_shown_on_print_and_edit_pages(self):
+        inv_id = self.save(payload(party_email="accounts@alpha.example")).json()["id"]
+        self.assertContains(self.client.get(reverse("invoice_print", args=[inv_id])), "accounts@alpha.example")
+        self.assertContains(self.client.get(reverse("invoice_edit", args=[inv_id])), "accounts@alpha.example")
 
 
 class InvoiceNumberTests(TestCase):

@@ -10,8 +10,8 @@ class FirmAdmin(admin.ModelAdmin):
 
 @admin.register(Party)
 class PartyAdmin(admin.ModelAdmin):
-    list_display = ("name", "gstin", "state", "phone")
-    search_fields = ("name", "gstin", "phone")
+    list_display = ("name", "gstin", "state", "phone", "email")
+    search_fields = ("name", "gstin", "phone", "email")
 
 
 @admin.register(Product)

@@ -1,5 +1,6 @@
 import datetime
 import json
+import re
 from decimal import Decimal
 
 from django.conf import settings
@@ -16,6 +17,7 @@ from .calc import D, amount_in_words, compute_invoice, q2
 from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
 
 MAX_ROWS = 500
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 MAX_AMOUNT = Decimal("99999999999")  # stays below the DB field limit (14,2)
 
 
@@ -111,6 +113,9 @@ def _clean_payload(data, firm):
     elif len(party_name) > 200:
         errors.append("The party name is too long.")
 
+    party_email = (data.get("party_email") or "").strip()
+    if party_email and (len(party_email) > 254 or not EMAIL_RE.match(party_email)):
+        errors.append("Enter a valid party email address.")
     party_state = (data.get("party_state") or "").strip()
     if party_state and party_state not in STATE_CODES:
         errors.append("Select a valid party state.")
@@ -204,6 +209,7 @@ def _clean_payload(data, firm):
         "party_gstin": (data.get("party_gstin") or "").strip().upper()[:15],
         "party_state": party_state,
         "party_phone": (data.get("party_phone") or "").strip()[:40],
+        "party_email": party_email,
         "place_of_supply": place,
         "price_mode": price_mode,
         "notes": (data.get("notes") or "").strip(),
@@ -218,7 +224,7 @@ def _resolve_party(c):
     if party is None:
         party = Party.objects.create(
             name=c["party_name"], address=c["party_address"], gstin=c["party_gstin"],
-            state=c["party_state"], phone=c["party_phone"],
+            state=c["party_state"], phone=c["party_phone"], email=c["party_email"],
         )
     return party
 
@@ -255,6 +261,7 @@ def invoice_save(request, pk=None):
             inv.party_gstin = c["party_gstin"]
             inv.party_state = c["party_state"]
             inv.party_phone = c["party_phone"]
+            inv.party_email = c["party_email"]
             inv.place_of_supply = c["place_of_supply"]
             inv.price_mode = c["price_mode"]
             inv.is_intra_state = r["intra"]
@@ -299,6 +306,7 @@ def invoice_form(request, pk=None):
             "party_gstin": invoice.party_gstin,
             "party_state": invoice.party_state,
             "party_phone": invoice.party_phone,
+            "party_email": invoice.party_email,
             "place_of_supply": invoice.place_of_supply,
             "notes": invoice.notes,
             "items": [
@@ -315,7 +323,7 @@ def invoice_form(request, pk=None):
             "date": today.isoformat(),
             "price_mode": "AMT",
             "party_name": "", "party_address": "", "party_gstin": "", "party_state": "",
-            "party_phone": "", "place_of_supply": "", "notes": "", "items": [],
+            "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "items": [],
         }
 
     init = {
@@ -326,7 +334,7 @@ def invoice_form(request, pk=None):
         "state_codes": STATE_CODES,
         "gst_rates": [_plain(r) for r in settings.GST_RATES],
         "default_gst": _plain(settings.DEFAULT_GST_RATE),
-        "parties": list(Party.objects.values("id", "name", "address", "gstin", "state", "phone")),
+        "parties": list(Party.objects.values("id", "name", "address", "gstin", "state", "phone", "email")),
         "products": [
             {"name": p.name, "hsn": p.hsn, "unit": p.unit, "rate": _plain(p.rate), "gst_rate": _plain(p.gst_rate)}
             for p in Product.objects.all()

@@ -108,6 +108,7 @@ class Invoice(models.Model):
     party_gstin = models.CharField(max_length=15, blank=True)
     party_state = models.CharField(max_length=60, blank=True)
     party_phone = models.CharField(max_length=40, blank=True)
+    party_email = models.EmailField(blank=True)
 
     place_of_supply = models.CharField(max_length=60, blank=True)
     price_mode = models.CharField(max_length=4, choices=PRICE_MODES, default="EXCL")

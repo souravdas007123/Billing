@@ -29,7 +29,8 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 ## Creating an invoice
 
 - **Invoice number** is generated automatically (for example `INV/26-27/0001`) and restarts every financial year (April to March). You can edit it.
-- **Party**: selecting one fills in the address, GSTIN, state and phone. The place of supply follows the party's state.
+- **Party**: selecting one fills in the address, GSTIN, state, phone and email. The place of supply follows the party's state.
+  The email is optional, is checked for a valid format, and is printed in the "Bill to" box.
 - **Items**: copy rows from Excel, then press Ctrl+V anywhere on the page. First choose the column order
   (for example `Item | Qty | Amount`). A header row is skipped automatically.
 - **GST rate**: choose it once at the top and it applies to every line. Change a single line to give it a different rate.

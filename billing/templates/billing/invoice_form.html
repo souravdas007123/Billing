@@ -68,6 +68,9 @@
       <label>Phone
         <input id="party_phone" maxlength="40">
       </label>
+      <label class="full">Email
+        <input id="party_email" type="email" maxlength="254" autocomplete="off" placeholder="name@example.com">
+      </label>
       <label>Party state
         <select id="party_state"></select>
       </label>
@@ -388,6 +391,7 @@
     $('party_gstin').value = p.gstin || '';
     $('party_state').value = p.state || '';
     $('party_phone').value = p.phone || '';
+    $('party_email').value = p.email || '';
     posManual = false;
     $('place_of_supply').value = p.state || '';
     gstinHint();
@@ -442,6 +446,7 @@
       party_gstin: $('party_gstin').value,
       party_state: $('party_state').value,
       party_phone: $('party_phone').value,
+      party_email: $('party_email').value,
       place_of_supply: effectivePlace(),
       notes: $('notes').value,
       items: allRows().map(tr => { const o = {}; FIELDS.forEach(f => { o[f] = get(tr, f); }); return o; }),
@@ -530,6 +535,7 @@
   $('party_gstin').value = inv.party_gstin;
   $('party_state').value = inv.party_state;
   $('party_phone').value = inv.party_phone;
+  $('party_email').value = inv.party_email || '';
   $('place_of_supply').value = inv.place_of_supply;
   posManual = !!inv.place_of_supply && inv.place_of_supply !== inv.party_state;
   $('notes').value = inv.notes;
