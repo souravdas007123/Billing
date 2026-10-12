@@ -15,6 +15,7 @@
   #items .o { display:block; background:var(--calc); padding:6px 10px; border-radius:6px; text-align:right; white-space:nowrap; min-width:92px; font-variant-numeric:tabular-nums; }
   #items tr:hover td { background:rgba(255,255,255,.015); }
   #items_table.m-amt .for-rate, #items_table.m-rate .for-amt { display:none; }
+  #items_table.t-intra .tx-inter, #items_table.t-inter .tx-intra { display:none; }
   #items .x { padding:2px 9px; color:var(--muted); border-color:transparent; background:transparent; font-size:13px; }
   #items .x:hover { color:var(--bad); background:var(--bad-bg); }
   .bottom { display:grid; grid-template-columns: 1fr 400px; gap:14px; margin-top:14px; }
@@ -104,7 +105,7 @@
   </div>
   <div class="scroll">
     <datalist id="product_list"></datalist>
-    <table id="items_table" class="m-amt">
+    <table id="items_table" class="m-amt t-intra">
       <thead>
         <tr>
           <th>#</th><th>Item / description</th><th>HSN</th><th class="num">Qty</th><th>Unit</th>
@@ -113,7 +114,8 @@
           <th class="num for-rate">Discount %</th>
           <th>GST %</th>
           <th class="num for-amt">Rate (excl. GST)</th>
-          <th class="num">Taxable value</th><th class="num">GST</th>
+          <th class="num">Taxable value</th>
+          <th class="num tx-intra">CGST</th><th class="num tx-intra">SGST</th><th class="num tx-inter">IGST</th>
           <th class="num for-rate">Amount</th><th></th>
         </tr>
       </thead>
@@ -257,7 +259,7 @@
       if (mode === 'AMT') carryToAmount(lastMode); else carryToRate(mode);
     }
     lastMode = mode;
-    $('items_table').className = isAmt() ? 'm-amt' : 'm-rate';
+    $('items_table').classList.toggle('m-amt', isAmt()); $('items_table').classList.toggle('m-rate', !isAmt());
     buildPasteOptions();
     scheduleCalc();
   }
@@ -293,7 +295,9 @@
       '<td><select data-f="gst_rate" style="width:84px">' + rateOptions + '</select></td>' +
       '<td class="for-amt"><span class="o" data-o="rate">0.00</span></td>' +
       '<td><span class="o" data-o="taxable">0.00</span></td>' +
-      '<td><span class="o" data-o="gst">0.00</span></td>' +
+      '<td class="tx-intra"><span class="o" data-o="cgst">0.00</span></td>' +
+      '<td class="tx-intra"><span class="o" data-o="sgst">0.00</span></td>' +
+      '<td class="tx-inter"><span class="o" data-o="igst">0.00</span></td>' +
       '<td class="for-rate"><span class="o" data-o="total">0.00</span></td>' +
       '<td><button type="button" class="x" tabindex="-1" title="Remove line" aria-label="Remove line">&#10005;</button></td>';
     tbody.insertBefore(tr, afterTr ? afterTr.nextSibling : null);
@@ -508,7 +512,7 @@
       const l = j.lines[i]; if (!l) return;
       if (l.rate != null) tr.querySelector('[data-o="rate"]').textContent = fmt(l.rate);
       tr.querySelector('[data-o="taxable"]').textContent = fmt(l.taxable);
-      tr.querySelector('[data-o="gst"]').textContent = fmt(l.gst);
+      ['cgst', 'sgst', 'igst'].forEach(k => { tr.querySelector('[data-o="' + k + '"]').textContent = fmt(l[k]); });
       tr.querySelector('[data-o="total"]').textContent = fmt(l.total);
     });
     $('t_taxable').textContent = fmt(j.taxable);
@@ -519,6 +523,7 @@
     $('t_total').textContent = fmt(j.total);
     $('t_words').textContent = Number(j.total) > 0 ? j.words : '';
     renderRateSummary(j);
+    $('items_table').classList.toggle('t-intra', !!j.intra); $('items_table').classList.toggle('t-inter', !j.intra);
     $('row_cgst').hidden = $('row_sgst').hidden = !j.intra;
     $('row_igst').hidden = j.intra;
     $('gst_type').textContent = j.intra ? 'Same state: CGST + SGST applies' : 'Different state: IGST applies';
