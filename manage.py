@@ -9,7 +9,7 @@ def main():
         from django.core.management import execute_from_command_line
     except ImportError as exc:
         raise ImportError(
-            "Django install nahi hai. Pehle `pip install -r requirements.txt` chalayein."
+            "Django is not installed. Run `pip install -r requirements.txt` first."
         ) from exc
     execute_from_command_line(sys.argv)
 

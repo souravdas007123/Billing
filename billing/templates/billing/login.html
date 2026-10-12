@@ -1,15 +1,15 @@
 {% extends "billing/base.html" %}
-{% block title %}Login{% endblock %}
+{% block title %}Log in{% endblock %}
 {% block content %}
-<div class="card" style="max-width:360px;margin:60px auto">
-  <h2>Billing Login</h2>
-  {% if form.errors %}<div class="msg">Username ya password galat hai.</div>{% endif %}
+<div class="card" style="max-width:380px;margin:72px auto">
+  <h2>Log in to Billing</h2>
+  {% if form.errors %}<div class="msg">Incorrect username or password.</div>{% endif %}
   <form method="post">
     {% csrf_token %}
     <label>Username {{ form.username }}</label>
     <label>Password {{ form.password }}</label>
     <input type="hidden" name="next" value="{{ next }}">
-    <button class="primary" type="submit" style="width:100%">Login</button>
+    <button class="primary" type="submit" style="width:100%;margin-top:6px">Log in</button>
   </form>
 </div>
 {% endblock %}

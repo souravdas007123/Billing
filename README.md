@@ -1,70 +1,68 @@
 # Office Billing (Django)
 
-Sirf bill banane ke liye ek simple app. Party select karo, Excel se items paste karo, GST rate chuno, baaki sab auto.
+A simple app for creating invoices. Pick a party, paste the items from Excel, choose the GST rate, and everything else is calculated for you.
 
-## Pehli baar setup
+## First-time setup
 
 ```bash
 python -m venv venv
 venv\Scripts\activate          # Windows   (Mac/Linux: source venv/bin/activate)
 pip install -r requirements.txt
 
-python manage.py makemigrations billing
 python manage.py migrate
-python manage.py createsuperuser      # ye aapka login hoga
+python manage.py createsuperuser      # this will be your login
 python manage.py runserver
 ```
 
-Browser me kholein: http://127.0.0.1:8000/
+Open http://127.0.0.1:8000/ in your browser.
 
-Office ke doosre computers se chalana ho to: `python manage.py runserver 0.0.0.0:8000`
-aur wo log `http://<is computer ka IP>:8000/` kholein.
+To use it from other computers in the office, run `python manage.py runserver 0.0.0.0:8000`
+and open `http://<this computer's IP address>:8000/` on the other machines.
 
-## Ek baar ye bhar lein (Admin: http://127.0.0.1:8000/admin/)
+## One-time setup in the admin site (http://127.0.0.1:8000/admin/)
 
-1. **Firm** me apni firm ki details: naam, address, GSTIN, **State**, bank details, terms, invoice prefix.
-   State sahi hona zaroori hai: isi se CGST+SGST ya IGST tay hota hai.
-2. **Parties** me customers (ya bill banate waqt naya naam likh do, wo apne aap save ho jayega).
-3. **Products** (optional): item ka naam likhte hi HSN, unit, rate, GST% khud aa jaate hain.
+1. **Firm**: your company name, address, GSTIN, **state**, bank details, terms and invoice prefix.
+   The state must be correct, because it decides whether CGST + SGST or IGST is charged.
+2. **Parties**: your customers. You can also just type a new name while creating an invoice and it is saved automatically.
+3. **Products** (optional): when you type an item name, its HSN, unit, rate and GST % are filled in automatically.
 
-## Bill kaise banta hai
+## Creating an invoice
 
-- **Invoice No** apne aap aata hai (`INV/26-27/0001`, financial year Apr-Mar ke hisaab se). Badalna ho to badal do.
-- **Party** chunte hi address, GSTIN, state, phone aa jaata hai. State se Place of Supply set hota hai.
-- **Items**: Excel me rows copy karo -> page par kahin bhi Ctrl+V. Pehle "column order" chun lo
-  (jaise `Item | Qty | Rate`). Header wali row apne aap skip hoti hai.
-- **GST rate**: upar ek baar chuno, sab lines par lag jaata hai. Kisi line ka alag rate ho to us line me badlo.
-- **GST Including / Excluding**: ek dropdown se badalte hi poora hisaab badal jaata hai.
-- Totals, CGST/SGST/IGST, round-off aur amount in words live dikhte hain.
-- **Ctrl+S** = Save & Print. Print page se Ctrl+P karke PDF bhi bana sakte ho.
+- **Invoice number** is generated automatically (for example `INV/26-27/0001`) and restarts every financial year (April to March). You can edit it.
+- **Party**: selecting one fills in the address, GSTIN, state and phone. The place of supply follows the party's state.
+- **Items**: copy rows from Excel, then press Ctrl+V anywhere on the page. First choose the column order
+  (for example `Item | Qty | Rate`). A header row is skipped automatically.
+- **GST rate**: choose it once at the top and it applies to every line. Change a single line to give it a different rate.
+- **GST included / excluded**: one dropdown switches the whole calculation.
+- Totals, CGST / SGST / IGST, round-off and the amount in words update live.
+- **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
-## Hisaab ke rules (accuracy)
+## How the numbers are calculated
 
-- Final hisaab hamesha server par `billing/calc.py` se hota hai (Decimal me, float kahin nahi). Screen par jo dikhta hai wahi save hota hai.
-- Exclusive: GST taxable value par upar se. Inclusive: rate ke andar se GST nikalta hai, line ka total waisa hi rehta hai jaisa rate se bana.
-- Har line ka GST alag round hota hai, CGST + SGST hamesha GST ke barabar. Total nearest rupee tak round-off.
-- Bill par party ki details ki copy save hoti hai, isliye baad me party badalne se purane bill nahi badalte.
-- Galat entry (qty 0, rate khaali, galat GST rate, duplicate invoice no) save hone se pehle rok di jaati hai.
-- GSTIN ka checksum check hota hai (sirf chetavni dikhata hai, rokta nahi).
+- The final calculation always happens on the server in `billing/calc.py`, using Decimal (never floats). What you see on screen is exactly what is saved.
+- GST excluded: GST is added on top of the taxable value. GST included: the GST is taken out of the rate, and the line total stays equal to what the rate gives.
+- GST is rounded per line, and CGST + SGST always add up to the GST. The invoice total is rounded to the nearest rupee.
+- The party's details are copied onto the invoice, so editing a party later does not change old invoices.
+- Invalid entries (quantity 0, a missing rate, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
+- The GSTIN checksum is verified (it shows a warning but does not block saving).
 
-## GST rates badalne ho
+## Changing the GST rates
 
-`config/settings.py` me `GST_RATES` aur `DEFAULT_GST_RATE`. Jo rates aapka CA bataye wahi rakhein.
+Edit `GST_RATES` and `DEFAULT_GST_RATE` in `config/settings.py`. Use the rates your accountant confirms.
 
-## Backup
+## Backups
 
-Saara data `db.sqlite3` file me hai. Roz iski copy kisi doosri jagah rakh lein.
+All data is stored in the `db.sqlite3` file, which is not tracked by git. Copy it to another location every day.
 
 ## Tests
 
 ```bash
-python manage.py test                 # poora
-python -m unittest billing.test_calc  # sirf hisaab ke tests (Django ke bina)
+python manage.py test                 # everything
+python -m unittest billing.test_calc  # only the calculation tests (no Django needed)
 ```
 
-## Production me chalana ho
+## Running in production
 
-`DJANGO_SECRET_KEY` set karein, `DJANGO_DEBUG=0`, `DJANGO_ALLOWED_HOSTS=aapka-ip-ya-domain`,
-aur `runserver` ki jagah waitress/gunicorn jaisa server use karein. `DEBUG=0` par admin ke CSS/JS
-dikhane ke liye `whitenoise` jaisa static-file setup bhi lagana padega (`python manage.py collectstatic`).
-Sirf office LAN ke andar chalana ho to `runserver` kaafi hai.
+Set `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=0` and `DJANGO_ALLOWED_HOSTS=your-ip-or-domain`, and use a server such as
+waitress or gunicorn instead of `runserver`. With `DEBUG=0`, the admin site needs a static-file setup such as
+`whitenoise` (`python manage.py collectstatic`). For use only inside the office LAN, `runserver` is enough.

@@ -1,25 +1,29 @@
 {% extends "billing/base.html" %}
-{% block title %}{% if editing %}Bill Edit{% else %}Naya Bill{% endif %}{% endblock %}
+{% block title %}{% if editing %}Edit invoice{% else %}New invoice{% endif %}{% endblock %}
 {% block head %}
 <style>
-  .grid2 { display:grid; grid-template-columns: 1fr 2fr; gap:12px; margin-bottom:12px; }
-  .party-grid { display:grid; grid-template-columns: 1fr 1fr; gap:0 12px; }
+  .grid2 { display:grid; grid-template-columns: 1fr 2fr; gap:14px; margin-bottom:14px; }
+  .party-grid { display:grid; grid-template-columns: 1fr 1fr; gap:0 14px; }
   .party-grid .full { grid-column: 1 / -1; }
-  .toolbar { display:flex; flex-wrap:wrap; gap:14px; align-items:end; margin-bottom:10px; }
-  .toolbar label { margin:0; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:14px; align-items:end; margin-bottom:12px; }
+  .toolbar label { margin:0; display:flex; flex-direction:column; gap:4px; }
+  .toolbar label select { margin-top:0; }
   .toolbar select { width:auto; min-width:150px; }
   .hint { font-size:12px; color:var(--muted); }
   .scroll { overflow-x:auto; }
-  #items input, #items select { padding:6px 6px; }
-  #items td.out { background:var(--out); padding:6px 8px; white-space:nowrap; min-width:84px; }
-  #items .x { padding:2px 8px; color:var(--bad); border-color:transparent; background:transparent; }
-  .bottom { display:grid; grid-template-columns: 1fr 380px; gap:12px; margin-top:12px; }
-  .tot td { padding:5px 4px; border:0; }
-  .tot tr.grand td { border-top:2px solid var(--ink); font-size:18px; font-weight:700; padding-top:8px; }
-  .words { font-size:12px; color:var(--muted); margin-top:6px; }
+  #items input, #items select { padding:6px 8px; margin-top:0; }
+  #items td.out { background:var(--calc); padding:6px 10px; white-space:nowrap; min-width:92px; border-bottom-color:var(--bg); }
+  #items tr:hover td:not(.out) { background:rgba(255,255,255,.015); }
+  #items .x { padding:2px 9px; color:var(--muted); border-color:transparent; background:transparent; font-size:13px; }
+  #items .x:hover { color:var(--bad); background:var(--bad-bg); }
+  .bottom { display:grid; grid-template-columns: 1fr 400px; gap:14px; margin-top:14px; }
+  .tot td { padding:6px 4px; border:0; }
+  .tot tr.grand td { border-top:1px solid var(--line); font-size:22px; font-weight:700; padding-top:12px; color:#fff; }
+  .words { font-size:12px; color:var(--muted); margin-top:8px; }
   .warn { color:var(--bad); font-size:12px; }
   .good { color:var(--ok); font-size:12px; }
-  .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+  .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+  textarea { resize:vertical; }
   @media (max-width: 900px) { .grid2, .bottom { grid-template-columns: 1fr; } }
 </style>
 {% endblock %}
@@ -29,17 +33,18 @@
 
 <div class="grid2">
   <section class="card">
-    <h3>{% if editing %}Bill Edit{% else %}Bill Details{% endif %}</h3>
-    <label>Invoice No (auto, chahein to badlein)
+    <h3>{% if editing %}Edit invoice{% else %}Invoice details{% endif %}</h3>
+    <label>Invoice number
       <input id="invoice_no" maxlength="40">
+      <span class="hint">Generated automatically. You can change it.</span>
     </label>
     <label>Date
       <input id="date" type="date">
     </label>
-    <label>Rate kaise hai?
+    <label>Pricing
       <select id="price_mode">
-        <option value="EXCL">GST Excluding (GST upar se judega)</option>
-        <option value="INCL">GST Including (rate me GST shamil hai)</option>
+        <option value="EXCL">GST excluded (GST is added on top)</option>
+        <option value="INCL">GST included (rates already contain GST)</option>
       </select>
     </label>
   </section>
@@ -47,7 +52,7 @@
   <section class="card">
     <h3>Party</h3>
     <div class="party-grid">
-      <label class="full">Party ka naam (list me se chunein, ya naya likhein &mdash; naya party auto save ho jayega)
+      <label class="full">Party name (pick from the list, or type a new name &mdash; new parties are saved automatically)
         <input id="party_name" list="party_list" autocomplete="off" maxlength="200">
       </label>
       <datalist id="party_list"></datalist>
@@ -61,10 +66,10 @@
       <label>Phone
         <input id="party_phone" maxlength="40">
       </label>
-      <label>Party ka State
+      <label>Party state
         <select id="party_state"></select>
       </label>
-      <label>Place of Supply
+      <label>Place of supply
         <select id="place_of_supply"></select>
         <span id="gst_type" class="hint"></span>
       </label>
@@ -75,11 +80,11 @@
 <section class="card">
   <h3>Items</h3>
   <div class="toolbar">
-    <label>Sab items par GST rate
+    <label>GST rate for all items
       <select id="default_gst"></select>
     </label>
-    <button type="button" id="apply_all">Sab lines par lagao</button>
-    <label>Excel se paste ka column order
+    <button type="button" id="apply_all">Apply to all lines</button>
+    <label>Column order when pasting
       <select id="paste_map">
         <option value="description,qty,rate">Item | Qty | Rate</option>
         <option value="description,hsn,qty,rate">Item | HSN | Qty | Rate</option>
@@ -88,38 +93,38 @@
         <option value="description,hsn,qty,unit,rate,gst_rate">Item | HSN | Qty | Unit | Rate | GST%</option>
       </select>
     </label>
-    <span class="hint">Excel me rows copy karke yahan kahin bhi Ctrl+V karein &mdash; saari lines ek saath bhar jayengi.</span>
+    <span class="hint">Copy rows from Excel and press Ctrl+V anywhere on this page to fill all lines at once.</span>
   </div>
   <div class="scroll">
     <datalist id="product_list"></datalist>
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Item / Description</th><th>HSN</th><th class="num">Qty</th><th>Unit</th>
-          <th class="num">Rate</th><th class="num">Disc %</th><th>GST %</th>
-          <th class="num">Taxable</th><th class="num">GST</th><th class="num">Amount</th><th></th>
+          <th>#</th><th>Item / description</th><th>HSN</th><th class="num">Qty</th><th>Unit</th>
+          <th class="num">Rate</th><th class="num">Discount %</th><th>GST %</th>
+          <th class="num">Taxable value</th><th class="num">GST</th><th class="num">Amount</th><th></th>
         </tr>
       </thead>
       <tbody id="items"></tbody>
     </table>
   </div>
-  <div style="margin-top:8px"><button type="button" id="add_row">+ Line jodein</button>
-    <span class="hint">&nbsp;Enter dabane par agli line me same column par jaate hain.</span></div>
+  <div style="margin-top:8px"><button type="button" id="add_row">Add line</button>
+    <span class="hint">&nbsp;Press Enter to jump to the same column on the next line.</span></div>
 </section>
 
 <div class="bottom">
   <section class="card">
-    <label>Notes / Remarks (bill par dikhega)
+    <label>Notes (printed on the invoice)
       <textarea id="notes" rows="4"></textarea>
     </label>
   </section>
   <section class="card">
     <table class="tot">
-      <tr><td>Taxable Value</td><td class="num" id="t_taxable">0.00</td></tr>
+      <tr><td>Taxable value</td><td class="num" id="t_taxable">0.00</td></tr>
       <tr id="row_cgst"><td>CGST</td><td class="num" id="t_cgst">0.00</td></tr>
       <tr id="row_sgst"><td>SGST</td><td class="num" id="t_sgst">0.00</td></tr>
       <tr id="row_igst" hidden><td>IGST</td><td class="num" id="t_igst">0.00</td></tr>
-      <tr><td>Round off</td><td class="num" id="t_round">0.00</td></tr>
+      <tr><td>Round-off</td><td class="num" id="t_round">0.00</td></tr>
       <tr class="grand"><td>Total</td><td class="num" id="t_total">0.00</td></tr>
     </table>
     <div class="words" id="t_words"></div>
@@ -128,8 +133,8 @@
 </div>
 
 <div class="actions">
-  <button type="button" id="save_new">Save &amp; Naya Bill</button>
-  <button type="button" class="primary" id="save">Save &amp; Print (Ctrl+S)</button>
+  <button type="button" id="save_new">Save &amp; new invoice</button>
+  <button type="button" class="primary" id="save">Save &amp; print (Ctrl+S)</button>
 </div>
 
 {{ init|json_script:"init-data" }}
@@ -154,7 +159,7 @@
   // ---------- dropdowns ----------
   function fillStateSelect(sel) {
     sel.innerHTML = '';
-    sel.add(new Option('— chunein —', ''));
+    sel.add(new Option('Select state', ''));
     STATES.forEach(s => sel.add(new Option(s, s)));
   }
   fillStateSelect($('party_state'));
@@ -194,7 +199,7 @@
       '<td class="num out" data-o="taxable">0.00</td>' +
       '<td class="num out" data-o="gst">0.00</td>' +
       '<td class="num out" data-o="total">0.00</td>' +
-      '<td><button type="button" class="x" tabindex="-1" title="Line hataein">&#10005;</button></td>';
+      '<td><button type="button" class="x" tabindex="-1" title="Remove line" aria-label="Remove line">&#10005;</button></td>';
     tbody.insertBefore(tr, afterTr ? afterTr.nextSibling : null);
     set(tr, 'description', v.description);
     set(tr, 'hsn', v.hsn);
@@ -252,7 +257,7 @@
     const isNum = s => { s = cleanNum(s); return s !== '' && isFinite(Number(s)); };
     const qi = map.indexOf('qty'), ri = map.indexOf('rate');
     const head = lines[0].split('\t');
-    if (qi >= 0 && ri >= 0 && !isNum(head[qi] || '') && !isNum(head[ri] || '')) lines.shift();  // header row chhod do
+    if (qi >= 0 && ri >= 0 && !isNum(head[qi] || '') && !isNum(head[ri] || '')) lines.shift();  // skip the header row
     if (!lines.length) return;
 
     let tr = null;
@@ -279,11 +284,11 @@
   }
   tbody.addEventListener('paste', e => {
     const text = (e.clipboardData || window.clipboardData).getData('text');
-    if (!/[\t\n]/.test(text.replace(/\s+$/, ''))) return;  // ek hi cell ho to normal paste
+    if (!/[\t\n]/.test(text.replace(/\s+$/, ''))) return;  // a single cell: let the browser paste normally
     e.preventDefault();
     pasteRows(text, e.target.closest('tr'));
   });
-  document.addEventListener('paste', e => {  // page par kahin bhi (kisi field me nahi) Ctrl+V
+  document.addEventListener('paste', e => {  // Ctrl+V anywhere on the page (outside a field)
     if (e.defaultPrevented || e.target.closest('input, textarea, select')) return;
     const text = (e.clipboardData || window.clipboardData).getData('text');
     if (text.trim()) { e.preventDefault(); pasteRows(text, null); }
@@ -333,8 +338,8 @@
     const h = $('gstin_hint');
     if (!g) { h.textContent = ''; h.className = 'hint'; return; }
     if (g.length < 15) { h.textContent = g.length + '/15'; h.className = 'hint'; return; }
-    if (gstinOk(g)) { h.textContent = 'GSTIN sahi lag raha hai'; h.className = 'good'; }
-    else { h.textContent = 'GSTIN galat lag raha hai, check karein'; h.className = 'warn'; }
+    if (gstinOk(g)) { h.textContent = 'GSTIN looks valid'; h.className = 'good'; }
+    else { h.textContent = 'GSTIN looks invalid. Please check it.'; h.className = 'warn'; }
   }
   $('party_gstin').addEventListener('input', () => {
     const el = $('party_gstin');
@@ -348,7 +353,7 @@
     }
   });
 
-  // ---------- calculation (server hi final hisaab karta hai) ----------
+  // ---------- calculation (the server always does the final math) ----------
   let calcTimer = null, calcSeq = 0;
   function scheduleCalc() { clearTimeout(calcTimer); calcTimer = setTimeout(calc, 180); }
   const effectivePlace = () => $('place_of_supply').value || $('party_state').value;
@@ -379,11 +384,11 @@
       const r = await post(INIT.calc_url, { price_mode: d.price_mode, place_of_supply: d.place_of_supply, items: d.items });
       const j = await r.json();
       if (seq !== calcSeq) return;
-      if (!j.ok) { $('calc_status').textContent = (j.errors || ['Calculation nahi ho paya']).join(' '); return; }
+      if (!j.ok) { $('calc_status').textContent = (j.errors || ['Could not calculate the totals.']).join(' '); return; }
       $('calc_status').textContent = '';
       render(j);
     } catch (e) {
-      if (seq === calcSeq) $('calc_status').textContent = 'Server se connection nahi ho raha.';
+      if (seq === calcSeq) $('calc_status').textContent = 'Cannot reach the server.';
     }
   }
   function render(j) {
@@ -402,7 +407,7 @@
     $('t_words').textContent = Number(j.total) > 0 ? j.words : '';
     $('row_cgst').hidden = $('row_sgst').hidden = !j.intra;
     $('row_igst').hidden = j.intra;
-    $('gst_type').textContent = j.intra ? 'Same state: CGST + SGST lagega' : 'Doosra state: IGST lagega';
+    $('gst_type').textContent = j.intra ? 'Same state: CGST + SGST applies' : 'Different state: IGST applies';
   }
 
   // ---------- save ----------
@@ -423,9 +428,9 @@
       const r = await post(INIT.save_url, collect());
       const j = await r.json();
       if (j.ok) { dirty = false; window.location.href = goNew ? INIT.new_url : j.print_url; return; }
-      showErrors(j.errors || ['Save nahi ho paya.']);
+      showErrors(j.errors || ['Could not save the invoice.']);
     } catch (e) {
-      showErrors(['Server se connection nahi ho paya. Dobara try karein.']);
+      showErrors(['Cannot reach the server. Please try again.']);
     }
     $('save').disabled = $('save_new').disabled = false;
   }

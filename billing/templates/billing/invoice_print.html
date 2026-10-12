@@ -2,9 +2,10 @@
 {% block title %}{{ invoice.invoice_no }}{% endblock %}
 {% block head %}
 <style>
-  .toolbar-top { display:flex; gap:10px; margin-bottom:12px; }
-  .sheet { background:#fff; border:1px solid var(--line); max-width:820px; margin:0 auto; padding:26px 30px; color:#000; font-size:12.5px; }
+  .toolbar-top { display:flex; gap:10px; margin-bottom:16px; max-width:820px; margin-left:auto; margin-right:auto; }
+  .sheet { background:#fff; border:1px solid var(--line); border-radius:4px; box-shadow:0 8px 30px rgba(0,0,0,.35); max-width:820px; margin:0 auto; padding:26px 30px; color:#000; font-size:12.5px; }
   .sheet h1 { margin:0; font-size:20px; }
+  .sheet .muted { color:#555; }
   .sheet table { border-collapse:collapse; width:100%; }
   .sheet th, .sheet td { border:1px solid #444; padding:4px 6px; vertical-align:top; color:#000; font-size:12px; }
   .sheet th { background:#f0f0f0; text-align:center; font-weight:700; }
@@ -25,16 +26,16 @@
     @page { size: A4; margin: 10mm; }
     main { padding:0; max-width:none; }
     .toolbar-top { display:none; }
-    .sheet { border:0; padding:0; max-width:none; }
+    .sheet { border:0; border-radius:0; box-shadow:none; padding:0; max-width:none; }
   }
 </style>
 {% endblock %}
 {% block content %}
 <div class="toolbar-top">
-  <button class="primary" onclick="window.print()">Print / PDF</button>
+  <button class="primary" onclick="window.print()">Print / save as PDF</button>
   <a class="btn" href="{% url 'invoice_edit' invoice.pk %}">Edit</a>
-  <a class="btn" href="{% url 'invoice_new' %}">+ Naya Bill</a>
-  <a class="btn" href="{% url 'invoice_list' %}">Saare Bills</a>
+  <a class="btn" href="{% url 'invoice_new' %}">New invoice</a>
+  <a class="btn" href="{% url 'invoice_list' %}">All invoices</a>
 </div>
 
 <div class="sheet">
@@ -63,10 +64,10 @@
       {% if invoice.party_state %}<div>State: {{ invoice.party_state }}</div>{% endif %}
     </div>
     <div class="box">
-      <div><b>Invoice No:</b> {{ invoice.invoice_no }}</div>
+      <div><b>Invoice no.:</b> {{ invoice.invoice_no }}</div>
       <div><b>Date:</b> {{ invoice.date|date:"d-m-Y" }}</div>
-      <div><b>Place of Supply:</b> {{ invoice.place_of_supply }}{% if pos_code %} ({{ pos_code }}){% endif %}</div>
-      {% if inclusive %}<div class="muted">Rates GST inclusive hain</div>{% endif %}
+      <div><b>Place of supply:</b> {{ invoice.place_of_supply }}{% if pos_code %} ({{ pos_code }}){% endif %}</div>
+      {% if inclusive %}<div class="muted">All rates are inclusive of GST</div>{% endif %}
     </div>
   </div>
 
@@ -74,7 +75,7 @@
     <thead>
       <tr>
         <th style="width:28px">#</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th>
-        <th>Disc %</th><th>Taxable</th><th>GST %</th><th>GST Amt</th><th>Amount</th>
+        <th>Discount %</th><th>Taxable value</th><th>GST %</th><th>GST amount</th><th>Amount</th>
       </tr>
     </thead>
     <tbody>
@@ -96,14 +97,14 @@
   </table>
 
   <table class="sum">
-    <tr><td>Taxable Value</td><td class="r">{{ invoice.taxable_value|floatformat:2 }}</td></tr>
+    <tr><td>Taxable value</td><td class="r">{{ invoice.taxable_value|floatformat:2 }}</td></tr>
     {% if invoice.is_intra_state %}
       <tr><td>CGST</td><td class="r">{{ invoice.cgst|floatformat:2 }}</td></tr>
       <tr><td>SGST</td><td class="r">{{ invoice.sgst|floatformat:2 }}</td></tr>
     {% else %}
       <tr><td>IGST</td><td class="r">{{ invoice.igst|floatformat:2 }}</td></tr>
     {% endif %}
-    <tr><td>Round off</td><td class="r">{{ invoice.round_off|floatformat:2 }}</td></tr>
+    <tr><td>Round-off</td><td class="r">{{ invoice.round_off|floatformat:2 }}</td></tr>
     <tr class="g"><td>Total</td><td class="r">&#8377; {{ invoice.total|floatformat:2 }}</td></tr>
   </table>
 
@@ -111,13 +112,13 @@
 
   <div class="foot">
     <div>
-      {% if firm.bank_details %}<div><b>Bank Details</b></div><div class="pre">{{ firm.bank_details }}</div>{% endif %}
+      {% if firm.bank_details %}<div><b>Bank details</b></div><div class="pre">{{ firm.bank_details }}</div>{% endif %}
       {% if invoice.notes %}<div style="margin-top:8px"><b>Notes</b></div><div class="pre">{{ invoice.notes }}</div>{% endif %}
-      {% if firm.terms %}<div style="margin-top:8px"><b>Terms &amp; Conditions</b></div><div class="pre">{{ firm.terms }}</div>{% endif %}
+      {% if firm.terms %}<div style="margin-top:8px"><b>Terms &amp; conditions</b></div><div class="pre">{{ firm.terms }}</div>{% endif %}
     </div>
     <div class="sign">
       For <b>{{ firm.name }}</b>
-      <div style="margin-top:42px">Authorised Signatory</div>
+      <div style="margin-top:42px">Authorised signatory</div>
     </div>
   </div>
 </div>

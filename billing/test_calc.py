@@ -1,4 +1,4 @@
-"""Pure calculation tests. Django ke bina bhi chalte hain:  python -m unittest billing.test_calc"""
+"""Pure calculation tests. They run without Django:  python -m unittest billing.test_calc"""
 import unittest
 from decimal import Decimal as Dc
 
@@ -95,8 +95,8 @@ class HelperTests(unittest.TestCase):
 
     def test_gstin_checksum(self):
         self.assertTrue(is_valid_gstin("27AAPFU0939F1ZV"))
-        self.assertFalse(is_valid_gstin("27AAPFU0939F1ZA"))  # galat check digit
-        self.assertFalse(is_valid_gstin("27AAPFU0939F1Z"))  # chhota
+        self.assertFalse(is_valid_gstin("27AAPFU0939F1ZA"))  # wrong check digit
+        self.assertFalse(is_valid_gstin("27AAPFU0939F1Z"))  # too short
         self.assertFalse(is_valid_gstin(""))
 
 

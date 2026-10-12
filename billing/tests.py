@@ -50,7 +50,7 @@ class BillingViewTests(TestCase):
         self.assertEqual((inv.taxable_value, inv.cgst, inv.sgst, inv.igst, inv.total), (2000, 180, 180, 0, 2360))
         self.assertTrue(inv.is_intra_state)
         self.assertEqual(inv.items.count(), 1)
-        self.assertTrue(Party.objects.filter(name="Alpha Traders").exists())  # naya party auto save
+        self.assertTrue(Party.objects.filter(name="Alpha Traders").exists())  # a new party is saved automatically
 
     def test_save_inter_state_uses_igst(self):
         self.save(payload(party_state="Maharashtra", place_of_supply="Maharashtra"))

@@ -4,10 +4,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Production me SECRET_KEY environment variable se set karein.
+# In production, set SECRET_KEY through an environment variable.
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-only-change-me-before-real-use")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
-# Office LAN par chalane ke liye. Internet par expose karna ho to yahan apna IP/domain daalein.
+# Open by default for use on an office LAN. If you expose it to the internet, list your IP or domain here.
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "*").split(",")
 
 INSTALLED_APPS = [
@@ -71,6 +71,6 @@ LOGIN_REDIRECT_URL = "invoice_new"
 LOGOUT_REDIRECT_URL = "login"
 
 # ---- Billing settings ----
-# GST rates jo dropdown me dikhenge. Apne CA se confirm karke badal sakte hain.
+# GST rates shown in the dropdown. Confirm them with your accountant before changing.
 GST_RATES = [Decimal(x) for x in ("0", "3", "5", "12", "18", "28", "40")]
 DEFAULT_GST_RATE = Decimal("18")

@@ -33,7 +33,7 @@ class InvoiceAdmin(admin.ModelAdmin):
     search_fields = ("invoice_no", "party_name", "party_gstin")
     date_hierarchy = "date"
     inlines = [InvoiceItemInline]
-    # Bill sirf billing screen se banao/badlo, taaki calculation hamesha server ke rules se ho.
+    # Invoices are created and edited only on the billing screen, so the totals always follow the server's rules.
     readonly_fields = [f.name for f in Invoice._meta.fields]
 
     def has_add_permission(self, request):

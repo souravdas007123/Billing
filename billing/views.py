@@ -16,12 +16,12 @@ from .calc import D, amount_in_words, compute_invoice
 from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
 
 MAX_ROWS = 500
-MAX_AMOUNT = Decimal("99999999999")  # DB field (14,2) ki limit se neeche
+MAX_AMOUNT = Decimal("99999999999")  # stays below the DB field limit (14,2)
 
 
 # ---------------- helpers ----------------
 def _plain(d):
-    """Decimal ko bina faltu zeros ke string banata hai: 100.0000 -> '100'."""
+    """Format a Decimal without trailing zeros: 100.0000 -> '100'."""
     return format(Decimal(d).normalize(), "f")
 
 
@@ -63,10 +63,10 @@ def _decimals_ok(value, places):
 def calc_api(request):
     data = _load_json(request)
     if not isinstance(data, dict):
-        return _err(["Data sahi format me nahi aaya."])
+        return _err(["The submitted data is not in a valid format."])
     items = data.get("items")
     if not isinstance(items, list) or len(items) > MAX_ROWS:
-        return _err(["Items sahi nahi hain."])
+        return _err(["The items are not valid."])
     items = [i if isinstance(i, dict) else {} for i in items]
     firm = Firm.get()
     try:
@@ -76,45 +76,45 @@ def calc_api(request):
             intra=_is_intra(firm, data.get("place_of_supply")),
         )
     except ArithmeticError:
-        return _err(["Koi amount bahut bada hai."])
+        return _err(["One of the amounts is too large."])
     return JsonResponse({"ok": True, **_serialize(result)})
 
 
-# ---------------- validation of a bill ----------------
+# ---------------- validation of an invoice ----------------
 def _clean_payload(data, firm):
     errors = []
 
     invoice_no = (data.get("invoice_no") or "").strip()
     if not invoice_no:
-        errors.append("Invoice number likhein.")
+        errors.append("Enter an invoice number.")
     elif len(invoice_no) > 40:
-        errors.append("Invoice number 40 akshar se chhota rakhein.")
+        errors.append("Invoice number must be 40 characters or fewer.")
 
     try:
         date = datetime.date.fromisoformat((data.get("date") or "").strip())
     except ValueError:
         date = None
-        errors.append("Date sahi nahi hai.")
+        errors.append("Enter a valid date.")
 
     party_name = (data.get("party_name") or "").strip()
     if not party_name:
-        errors.append("Party select karein ya naam likhein.")
+        errors.append("Select a party or enter a party name.")
     elif len(party_name) > 200:
-        errors.append("Party ka naam bahut lamba hai.")
+        errors.append("The party name is too long.")
 
     party_state = (data.get("party_state") or "").strip()
     if party_state and party_state not in STATE_CODES:
-        errors.append("Party ka state sahi nahi hai.")
+        errors.append("Select a valid party state.")
     place = (data.get("place_of_supply") or "").strip() or party_state or firm.state
     if place not in STATE_CODES:
-        errors.append("Place of supply sahi nahi hai.")
+        errors.append("Select a valid place of supply.")
 
     price_mode = "INCL" if data.get("price_mode") == "INCL" else "EXCL"
 
     allowed_rates = set(settings.GST_RATES)
     rows = data.get("items")
     if not isinstance(rows, list) or len(rows) > MAX_ROWS:
-        errors.append("Items sahi nahi hain.")
+        errors.append("The items are not valid.")
         rows = []
 
     items = []
@@ -125,34 +125,34 @@ def _clean_payload(data, firm):
         qty_text = str(r.get("qty") or "").strip()
         rate_text = str(r.get("rate") or "").strip()
         if not desc and not qty_text and not rate_text:
-            continue  # khaali row
-        label = f"Row {n}"
+            continue  # skip empty lines
+        label = f"Line {n}"
         qty, rate = D(qty_text), D(rate_text)
         disc, gst = D(r.get("discount_pct")), D(r.get("gst_rate"))
         hsn, unit = str(r.get("hsn") or "").strip(), str(r.get("unit") or "").strip()
 
         if not desc:
-            errors.append(f"{label}: item ka naam likhein.")
+            errors.append(f"{label}: enter the item name.")
         elif len(desc) > 300:
-            errors.append(f"{label}: item ka naam bahut lamba hai.")
+            errors.append(f"{label}: the item name is too long.")
         if qty <= 0 or qty >= Decimal(10) ** 10:
-            errors.append(f"{label}: quantity 0 se zyada honi chahiye.")
+            errors.append(f"{label}: quantity must be greater than 0.")
         elif not _decimals_ok(qty, 3):
-            errors.append(f"{label}: quantity me max 3 decimal.")
+            errors.append(f"{label}: quantity can have at most 3 decimal places.")
         if rate_text == "":
-            errors.append(f"{label}: rate likhein.")
+            errors.append(f"{label}: enter the rate.")
         elif rate < 0 or rate >= Decimal(10) ** 9:
-            errors.append(f"{label}: rate sahi nahi hai.")
+            errors.append(f"{label}: the rate is not valid.")
         elif not _decimals_ok(rate, 4):
-            errors.append(f"{label}: rate me max 4 decimal.")
+            errors.append(f"{label}: rate can have at most 4 decimal places.")
         if disc < 0 or disc > 100 or not _decimals_ok(disc, 2):
-            errors.append(f"{label}: discount 0 se 100 ke beech (max 2 decimal) hona chahiye.")
+            errors.append(f"{label}: discount must be between 0 and 100 (at most 2 decimal places).")
         if gst not in allowed_rates:
-            errors.append(f"{label}: GST rate list me se chunein.")
+            errors.append(f"{label}: select a GST rate from the list.")
         if len(hsn) > 12:
-            errors.append(f"{label}: HSN bahut lamba hai.")
+            errors.append(f"{label}: the HSN code is too long.")
         if len(unit) > 20:
-            errors.append(f"{label}: unit bahut lamba hai.")
+            errors.append(f"{label}: the unit is too long.")
 
         items.append(
             {"description": desc, "hsn": hsn, "qty": qty, "unit": unit, "rate": rate,
@@ -160,16 +160,16 @@ def _clean_payload(data, firm):
         )
 
     if not items and not errors:
-        errors.append("Kam se kam ek item daalein.")
+        errors.append("Add at least one item.")
     if errors:
         return None, errors
 
     try:
         result = compute_invoice(items, inclusive=price_mode == "INCL", intra=_is_intra(firm, place))
     except ArithmeticError:
-        return None, ["Koi amount bahut bada hai."]
+        return None, ["One of the amounts is too large."]
     if result["total"] > MAX_AMOUNT or any(l["total"] > MAX_AMOUNT for l in result["lines"]):
-        return None, ["Bill ki amount bahut badi hai."]
+        return None, ["The invoice total is too large."]
 
     return {
         "invoice_no": invoice_no,
@@ -188,7 +188,7 @@ def _clean_payload(data, firm):
 
 
 def _resolve_party(c):
-    """Party master me mil jaaye to wahi, nahi to naya bana deta hai (existing party ko chhedta nahi)."""
+    """Use the existing party if the name matches; otherwise create a new one (existing parties are never modified)."""
     party = Party.objects.filter(name__iexact=c["party_name"]).first()
     if party is None:
         party = Party.objects.create(
@@ -205,7 +205,7 @@ def invoice_save(request, pk=None):
     firm = Firm.get()
     data = _load_json(request)
     if not isinstance(data, dict):
-        return _err(["Data sahi format me nahi aaya."])
+        return _err(["The submitted data is not in a valid format."])
     c, errors = _clean_payload(data, firm)
     if errors:
         return _err(errors)
@@ -214,7 +214,7 @@ def invoice_save(request, pk=None):
     dup = Invoice.objects.filter(invoice_no=c["invoice_no"])
     if invoice:
         dup = dup.exclude(pk=invoice.pk)
-    dup_msg = [f"Invoice number {c['invoice_no']} pehle se maujood hai. Doosra number likhein."]
+    dup_msg = [f"Invoice number {c['invoice_no']} already exists. Enter a different number."]
     if dup.exists():
         return _err(dup_msg)
 

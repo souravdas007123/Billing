@@ -1,11 +1,11 @@
-"""Billing ka saara calculation yahin hota hai (Django se independent, isliye test karna aasaan).
+"""All invoice calculations live here (independent of Django, so they are easy to test).
 
 Rules:
-- Sab kuch Decimal me, float kahin nahi.
-- Exclusive: taxable = qty*rate - discount ; GST upar se judta hai.
-- Inclusive: line total = qty*rate - discount (final amount); taxable = total*100/(100+gst%).
-- Har line ka GST alag round hota hai; CGST = GST/2 (round), SGST = GST - CGST, taaki dono ka sum hamesha GST ke barabar rahe.
-- Invoice total nearest rupee tak round-off hota hai; round-off alag line me dikhta hai.
+- Everything uses Decimal; floats are never used.
+- Exclusive: taxable = qty*rate - discount; GST is added on top.
+- Inclusive: line total = qty*rate - discount (the final amount); taxable = total*100/(100+gst%).
+- GST is rounded per line; CGST = GST/2 (rounded) and SGST = GST - CGST, so the two always add up to the GST.
+- The invoice total is rounded to the nearest rupee, and the round-off is shown as a separate line.
 """
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
@@ -14,7 +14,7 @@ HUNDRED = Decimal("100")
 
 
 def D(value, default="0"):
-    """Kisi bhi input (str/number/None) ko safely Decimal banata hai. Commas, Rs, % hata deta hai."""
+    """Safely convert any input (str/number/None) to Decimal. Strips commas, currency symbols and %."""
     if value is None:
         return Decimal(default)
     if isinstance(value, Decimal):
@@ -62,7 +62,7 @@ def compute_line(qty, rate, discount_pct, gst_rate, inclusive, intra):
 
 
 def compute_invoice(items, inclusive, intra):
-    """items: list of dicts (qty, rate, discount_pct, gst_rate). Blank rows ke liye zeros aate hain."""
+    """items: list of dicts (qty, rate, discount_pct, gst_rate). Blank lines produce zeros."""
     lines = [
         compute_line(
             it.get("qty"), it.get("rate"), it.get("discount_pct"), it.get("gst_rate"), inclusive, intra
@@ -139,7 +139,7 @@ GSTIN_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 
 def is_valid_gstin(gstin):
-    """Format + checksum check. Blank GSTIN yahan invalid maana jaata hai; caller blank ko alag handle kare."""
+    """Format and checksum check. A blank GSTIN is treated as invalid here; callers should handle blanks separately."""
     g = (gstin or "").strip().upper()
     if len(g) != 15 or any(c not in GSTIN_CHARS for c in g):
         return False

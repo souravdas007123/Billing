@@ -4,7 +4,7 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
-# GST state codes (naam -> code)
+# GST state codes (name -> code)
 STATE_CODES = {
     "Jammu and Kashmir": "01", "Himachal Pradesh": "02", "Punjab": "03", "Chandigarh": "04",
     "Uttarakhand": "05", "Haryana": "06", "Delhi": "07", "Rajasthan": "08", "Uttar Pradesh": "09",
@@ -27,15 +27,15 @@ def state_from_gstin(gstin):
 
 
 class Firm(models.Model):
-    """Aapki apni firm ki details (ek hi record). Admin me jaakar bharein."""
+    """Your own company details (a single record). Fill it in from the admin site."""
 
-    name = models.CharField(max_length=200, default="Meri Firm")
+    name = models.CharField(max_length=200, default="My Company")
     address = models.TextField(blank=True)
     gstin = models.CharField("GSTIN", max_length=15, blank=True)
     state = models.CharField(max_length=60, choices=STATE_CHOICES, default="West Bengal")
     phone = models.CharField(max_length=40, blank=True)
     email = models.EmailField(blank=True)
-    bank_details = models.TextField(blank=True, help_text="Bill par neeche dikhega")
+    bank_details = models.TextField(blank=True, help_text="Printed at the bottom of the invoice")
     terms = models.TextField(blank=True, help_text="Terms & conditions")
     invoice_prefix = models.CharField(max_length=20, default="INV")
 
@@ -73,7 +73,7 @@ class Party(models.Model):
 
 
 class Product(models.Model):
-    """Optional item master: description likhte hi HSN, unit, rate, GST auto aa jaate hain."""
+    """Optional item master: typing a description fills in the HSN, unit, rate and GST automatically."""
 
     name = models.CharField(max_length=300, unique=True)
     hsn = models.CharField("HSN/SAC", max_length=12, blank=True)
@@ -98,7 +98,7 @@ class Invoice(models.Model):
     date = models.DateField(default=timezone.localdate)
     party = models.ForeignKey(Party, null=True, blank=True, on_delete=models.SET_NULL)
 
-    # Party ki details bill par "snapshot" ki tarah save hoti hain, taaki baad me party edit karne se purane bill na badle.
+    # Party details are stored on the invoice as a snapshot, so editing a party later does not change old invoices.
     party_name = models.CharField(max_length=200)
     party_address = models.TextField(blank=True)
     party_gstin = models.CharField(max_length=15, blank=True)
@@ -132,7 +132,7 @@ class Invoice(models.Model):
 
     @classmethod
     def next_number(cls, prefix, on_date=None):
-        """Agla number: PREFIX/26-27/0001 jaisa. Financial year (Apr-Mar) ke hisaab se series chalti hai."""
+        """Next number, e.g. PREFIX/26-27/0001. The series restarts each financial year (April to March)."""
         on_date = on_date or timezone.localdate()
         series = f"{prefix}/{financial_year_label(on_date)}/"
         last = 0

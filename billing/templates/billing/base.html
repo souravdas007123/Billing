@@ -3,46 +3,120 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
 <title>{% block title %}Billing{% endblock %}</title>
 <style>
-  :root { --bg:#f4f5f7; --card:#fff; --ink:#1d2330; --muted:#667085; --line:#d9dde5; --brand:#1f5eff; --brand-ink:#fff; --bad:#c0262d; --ok:#117a3d; --out:#f1f4fb; }
+  :root {
+    color-scheme: dark;
+    --bg: #12161d;
+    --surface: #1a202b;
+    --raised: #222a38;
+    --field: #141922;
+    --calc: #171d29;
+    --line: #2c3547;
+    --line-soft: #242c3b;
+    --ink: #dde3ed;
+    --muted: #93a0b6;
+    --accent: #7fb1e0;
+    --primary: #3a78bd;
+    --primary-hover: #4687cf;
+    --primary-ink: #ffffff;
+    --bad: #f0969b;
+    --bad-bg: rgba(240, 150, 155, .10);
+    --bad-line: rgba(240, 150, 155, .35);
+    --ok: #82d0a6;
+    --radius: 8px;
+  }
   * { box-sizing: border-box; }
-  body { margin:0; font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
-  header.top { background:#fff; border-bottom:1px solid var(--line); padding:0 16px; display:flex; align-items:center; gap:18px; height:48px; }
-  header.top a { color:var(--ink); text-decoration:none; font-weight:600; }
-  header.top a:hover { color:var(--brand); }
-  header.top .sp { flex:1; }
-  header.top form { margin:0; }
-  main { max-width:1280px; margin:0 auto; padding:16px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
-  h2,h3 { margin:0 0 10px; }
-  label { display:block; font-size:12px; color:var(--muted); margin-bottom:8px; }
-  input, select, textarea { width:100%; padding:7px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; color:var(--ink); background:#fff; }
-  input:focus, select:focus, textarea:focus { outline:2px solid #b8ccff; border-color:var(--brand); }
-  button, .btn { display:inline-block; padding:8px 14px; border:1px solid var(--line); background:#fff; border-radius:6px; font:inherit; font-weight:600; cursor:pointer; color:var(--ink); text-decoration:none; }
-  button.primary, .btn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-ink); }
-  button:disabled { opacity:.6; cursor:wait; }
-  table { border-collapse:collapse; width:100%; }
-  th { text-align:left; font-size:12px; color:var(--muted); font-weight:600; padding:6px; border-bottom:1px solid var(--line); white-space:nowrap; }
-  td { padding:4px; border-bottom:1px solid #eef0f4; vertical-align:middle; }
-  .num { text-align:right; font-variant-numeric:tabular-nums; }
-  .muted { color:var(--muted); }
-  .msg { padding:10px 12px; border-radius:6px; margin-bottom:12px; background:#fdecec; color:var(--bad); border:1px solid #f5c2c4; }
-  .msg ul { margin:0; padding-left:18px; }
-  @media print { header.top { display:none; } body { background:#fff; } }
+  html { scrollbar-color: #3a4558 var(--bg); }
+  body {
+    margin: 0;
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  header.top {
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+    padding: 0 20px;
+    display: flex;
+    align-items: stretch;
+    gap: 4px;
+    height: 52px;
+  }
+  header.top .brand { display: flex; align-items: center; margin-right: 18px; font-weight: 700; letter-spacing: .2px; color: var(--ink); }
+  header.top .brand:hover { text-decoration: none; }
+  header.top nav { display: flex; align-items: stretch; gap: 2px; }
+  header.top nav a {
+    display: flex; align-items: center; padding: 0 12px; color: var(--muted); font-weight: 600;
+    border-bottom: 2px solid transparent;
+  }
+  header.top nav a:hover { color: var(--ink); text-decoration: none; }
+  header.top nav a.active { color: var(--ink); border-bottom-color: var(--accent); }
+  header.top .sp { flex: 1; }
+  header.top .who { display: flex; align-items: center; gap: 12px; color: var(--muted); }
+  header.top form { margin: 0; }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 20px; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  h2, h3 { margin: 0 0 12px; font-weight: 650; letter-spacing: .1px; }
+  h3 { font-size: 15px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; margin-top: 4px;
+    border: 1px solid var(--line); border-radius: 6px;
+    font: inherit; color: var(--ink); background: var(--field);
+  }
+  input::placeholder, textarea::placeholder { color: #667289; }
+  input:hover, select:hover, textarea:hover { border-color: #3a4660; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent);
+  }
+  button, .btn {
+    display: inline-block; padding: 8px 14px; border: 1px solid var(--line); background: var(--raised);
+    border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; color: var(--ink); text-decoration: none;
+  }
+  button:hover, .btn:hover { background: #2a3447; text-decoration: none; }
+  button.primary, .btn.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+  button.primary:hover, .btn.primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+  button:disabled { opacity: .55; cursor: wait; }
+
+  table { border-collapse: collapse; width: 100%; }
+  th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 4px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  .muted { color: var(--muted); }
+  .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-line); }
+  .msg ul { margin: 0; padding-left: 18px; }
+
+  @media print {
+    header.top { display: none; }
+    body { background: #fff; color: #000; }
+  }
 </style>
 {% block head %}{% endblock %}
 </head>
 <body>
 {% if user.is_authenticated %}
+{% with page=request.resolver_match.url_name %}
 <header class="top">
-  <a href="{% url 'invoice_new' %}">+ Naya Bill</a>
-  <a href="{% url 'invoice_list' %}">Saare Bills</a>
-  <a href="{% url 'admin:index' %}">Party / Items / Firm (Admin)</a>
+  <a class="brand" href="{% url 'invoice_new' %}">Billing</a>
+  <nav>
+    <a href="{% url 'invoice_new' %}"{% if page == 'invoice_new' or page == 'invoice_edit' %} class="active"{% endif %}>New invoice</a>
+    <a href="{% url 'invoice_list' %}"{% if page == 'invoice_list' or page == 'invoice_print' %} class="active"{% endif %}>All invoices</a>
+    <a href="{% url 'admin:index' %}">Admin</a>
+  </nav>
   <span class="sp"></span>
-  <span class="muted">{{ user.get_username }}</span>
-  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Logout</button></form>
+  <div class="who">
+    <span>{{ user.get_username }}</span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>
+  </div>
 </header>
+{% endwith %}
 {% endif %}
 <main>{% block content %}{% endblock %}</main>
 </body>
