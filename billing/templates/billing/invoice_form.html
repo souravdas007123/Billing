@@ -23,7 +23,9 @@
   .words { font-size:12px; color:var(--muted); margin-top:8px; }
   .warn { color:var(--bad); font-size:12px; }
   .good { color:var(--ok); font-size:12px; }
-  .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+  .actions { display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap; margin-top:14px; }
+  .check { display:flex; align-items:center; gap:8px; margin:0 auto 0 0; font-size:13px; color:var(--ink); cursor:pointer; }
+  .check input { width:auto; margin:0; }
   textarea { resize:vertical; }
   @media (max-width: 900px) { .grid2, .bottom { grid-template-columns: 1fr; } }
 </style>
@@ -36,8 +38,10 @@
   <section class="card">
     <h3>{% if editing %}Edit invoice{% else %}Invoice details{% endif %}</h3>
     <label>Invoice number
-      <input id="invoice_no" maxlength="40">
-      <span class="hint">Generated automatically. You can change it.</span>
+      <input id="invoice_no" maxlength="40" autocomplete="off">
+      <span class="hint" style="display:block">Generated automatically. You can change it.</span>
+      <span class="hint" id="last_invoice" style="display:block"></span>
+      <span id="no_check" style="display:block;font-size:12px"></span>
     </label>
     <label>Date
       <input id="date" type="date">
@@ -137,6 +141,7 @@
 </div>
 
 <div class="actions">
+  <label class="check"><input type="checkbox" id="pending"> Not submitted yet (I will hand this bill over later)</label>
   <button type="button" id="save_new">Save &amp; new invoice</button>
   <button type="button" class="primary" id="save">Save &amp; print (Ctrl+S)</button>
 </div>
@@ -449,6 +454,7 @@
       party_email: $('party_email').value,
       place_of_supply: effectivePlace(),
       notes: $('notes').value,
+      submitted: !$('pending').checked,
       items: allRows().map(tr => { const o = {}; FIELDS.forEach(f => { o[f] = get(tr, f); }); return o; }),
     };
   }
@@ -491,6 +497,24 @@
     $('row_igst').hidden = j.intra;
     $('gst_type').textContent = j.intra ? 'Same state: CGST + SGST applies' : 'Different state: IGST applies';
   }
+
+  // ---------- invoice number: last invoice and a live duplicate check ----------
+  const last = INIT.last_invoice;
+  $('last_invoice').textContent = last ? 'Last invoice: ' + last.no + ' (' + last.date + ', ' + last.party + ')' : 'No invoices have been created yet.';
+  let noTimer = null, noSeq = 0;
+  function checkNumber() {
+    const no = $('invoice_no').value.trim();
+    const out = $('no_check');
+    const seq = ++noSeq;
+    if (!no) { out.textContent = ''; return; }
+    const url = INIT.check_url + '?no=' + encodeURIComponent(no) + (INIT.invoice_id ? '&exclude=' + INIT.invoice_id : '');
+    fetch(url).then(r => r.json()).then(j => {
+      if (seq !== noSeq) return;
+      if (j.exists) { out.className = 'warn'; out.textContent = 'This number is already used by another invoice (' + j.date + ', ' + j.party + ').'; }
+      else { out.className = 'good'; out.textContent = 'This number is available.'; }
+    }).catch(() => { if (seq === noSeq) out.textContent = ''; });
+  }
+  $('invoice_no').addEventListener('input', () => { clearTimeout(noTimer); noTimer = setTimeout(checkNumber, 300); });
 
   // ---------- save ----------
   function showErrors(list) {
@@ -539,6 +563,7 @@
   $('place_of_supply').value = inv.place_of_supply;
   posManual = !!inv.place_of_supply && inv.place_of_supply !== inv.party_state;
   $('notes').value = inv.notes;
+  $('pending').checked = !!inv.pending;
   gstinHint();
   if (inv.items.length) inv.items.forEach(it => addRow(it)); else addRow();
   dirty = false;

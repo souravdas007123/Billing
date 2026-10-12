@@ -122,6 +122,8 @@ class Invoice(models.Model):
     total = models.DecimalField(max_digits=14, decimal_places=2, default=0)
 
     notes = models.TextField(blank=True)
+    # The day the bill was handed over. Empty means the bill is made but not submitted yet.
+    submitted_on = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -130,6 +132,10 @@ class Invoice(models.Model):
 
     def __str__(self):
         return f"{self.invoice_no} - {self.party_name}"
+
+    @property
+    def is_pending(self):
+        return self.submitted_on is None
 
     @property
     def gst_total(self):

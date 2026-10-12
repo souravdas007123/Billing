@@ -7,10 +7,11 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.db.models import Q
-from django.http import JsonResponse
+from django.http import HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2
@@ -210,6 +211,7 @@ def _clean_payload(data, firm):
         "party_state": party_state,
         "party_phone": (data.get("party_phone") or "").strip()[:40],
         "party_email": party_email,
+        "submitted": data.get("submitted") is not False,  # only an explicit false means "give it later"
         "place_of_supply": place,
         "price_mode": price_mode,
         "notes": (data.get("notes") or "").strip(),
@@ -270,6 +272,10 @@ def invoice_save(request, pk=None):
             inv.round_off = r["round_off"]
             inv.total = r["total"]
             inv.notes = c["notes"]
+            if not c["submitted"]:
+                inv.submitted_on = None
+            elif inv.submitted_on is None:
+                inv.submitted_on = timezone.localdate()
             inv.save()
             if invoice:
                 inv.items.all().delete()
@@ -288,6 +294,34 @@ def invoice_save(request, pk=None):
         return _err(dup_msg)
 
     return JsonResponse({"ok": True, "id": inv.pk, "print_url": reverse("invoice_print", args=[inv.pk])})
+
+
+# ---------------- invoice number helpers ----------------
+def _last_invoice(current=None):
+    """The most recently created invoice (other than the one being edited), for the hint under the number field."""
+    qs = Invoice.objects.order_by("-id")
+    if current is not None:
+        qs = qs.exclude(pk=current.pk)
+    last = qs.first()
+    if last is None:
+        return None
+    return {"no": last.invoice_no, "date": last.date.strftime("%d-%m-%Y"), "party": last.party_name}
+
+
+@login_required
+def check_number(request):
+    """Tell the billing screen whether an invoice number is already used, while the user types it."""
+    number = (request.GET.get("no") or "").strip()
+    if not number:
+        return JsonResponse({"exists": False})
+    qs = Invoice.objects.filter(invoice_no=number)
+    exclude = request.GET.get("exclude") or ""
+    if exclude.isdigit():
+        qs = qs.exclude(pk=int(exclude))
+    found = qs.first()
+    if found is None:
+        return JsonResponse({"exists": False})
+    return JsonResponse({"exists": True, "date": found.date.strftime("%d-%m-%Y"), "party": found.party_name})
 
 
 # ---------------- pages ----------------
@@ -309,6 +343,7 @@ def invoice_form(request, pk=None):
             "party_email": invoice.party_email,
             "place_of_supply": invoice.place_of_supply,
             "notes": invoice.notes,
+            "pending": invoice.is_pending,
             "items": [
                 {"description": i.description, "hsn": i.hsn, "qty": _plain(i.qty), "unit": i.unit,
                  "rate": _plain(i.rate), "amount": _plain(i.line_total),
@@ -323,13 +358,16 @@ def invoice_form(request, pk=None):
             "date": today.isoformat(),
             "price_mode": "AMT",
             "party_name": "", "party_address": "", "party_gstin": "", "party_state": "",
-            "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "items": [],
+            "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "pending": False, "items": [],
         }
 
     init = {
         "save_url": reverse("invoice_update", args=[invoice.pk]) if invoice else reverse("invoice_save"),
         "calc_url": reverse("calc_api"),
         "new_url": reverse("invoice_new"),
+        "check_url": reverse("check_number"),
+        "invoice_id": invoice.pk if invoice else None,
+        "last_invoice": _last_invoice(invoice),
         "firm_state": firm.state,
         "state_codes": STATE_CODES,
         "gst_rates": [_plain(r) for r in settings.GST_RATES],
@@ -347,10 +385,39 @@ def invoice_form(request, pk=None):
 @login_required
 def invoice_list(request):
     q = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "")
+    status = status if status in ("pending", "submitted") else ""
     qs = Invoice.objects.all()
     if q:
         qs = qs.filter(Q(invoice_no__icontains=q) | Q(party_name__icontains=q) | Q(party_gstin__icontains=q))
-    return render(request, "billing/invoice_list.html", {"invoices": qs[:200], "q": q})
+    if status == "pending":
+        qs = qs.filter(submitted_on__isnull=True)
+    elif status == "submitted":
+        qs = qs.filter(submitted_on__isnull=False)
+    pending_count = Invoice.objects.filter(submitted_on__isnull=True).count()
+    total_count = Invoice.objects.count()
+    counts = {"all": total_count, "pending": pending_count, "submitted": total_count - pending_count}
+    return render(
+        request,
+        "billing/invoice_list.html",
+        {"invoices": qs[:200], "q": q, "status": status, "counts": counts},
+    )
+
+
+@login_required
+@require_POST
+def invoice_submit(request, pk):
+    """Mark a bill as handed over (or back to pending), from the list or the print page."""
+    invoice = get_object_or_404(Invoice, pk=pk)
+    if request.POST.get("action") == "unsubmit":
+        invoice.submitted_on = None
+    elif invoice.submitted_on is None:
+        invoice.submitted_on = timezone.localdate()
+    invoice.save(update_fields=["submitted_on", "updated_at"])
+    target = request.POST.get("next", "")
+    if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
+        target = reverse("invoice_list")
+    return HttpResponseRedirect(target)
 
 
 @login_required

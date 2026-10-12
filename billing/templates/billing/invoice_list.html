@@ -11,6 +11,14 @@
   .list-table tbody tr:last-child td { border-bottom: 0; }
   .list-table td.actions { text-align: right; white-space: nowrap; }
   .empty { padding: 28px 12px; color: var(--muted); text-align: center; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  .tabs a { padding: 6px 14px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-weight: 600; }
+  .tabs a:hover { color: var(--ink); text-decoration: none; }
+  .tabs a.active { color: var(--ink); background: var(--raised); border-color: #3a4660; }
+  .tabs .n { color: var(--muted); font-weight: 500; margin-left: 4px; }
+  form.inline { display: inline; margin: 0; }
+  button.link { padding: 0; border: 0; background: none; color: var(--accent); font-weight: 400; }
+  button.link:hover { background: none; text-decoration: underline; }
 </style>
 {% endblock %}
 {% block content %}
@@ -23,9 +31,14 @@
   </form>
   <a class="btn primary" href="{% url 'invoice_new' %}">New invoice</a>
 </div>
+<div class="tabs">
+  <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not status %} class="active"{% endif %}>All<span class="n">{{ counts.all }}</span></a>
+  <a href="?status=pending{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'pending' %} class="active"{% endif %}>Not submitted<span class="n">{{ counts.pending }}</span></a>
+  <a href="?status=submitted{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'submitted' %} class="active"{% endif %}>Submitted<span class="n">{{ counts.submitted }}</span></a>
+</div>
 <div class="card" style="padding:0;overflow:hidden">
   <table class="list-table">
-    <thead><tr><th>Invoice no.</th><th>Date</th><th>Party</th><th class="num">Taxable value</th><th class="num">GST</th><th class="num">Total</th><th></th></tr></thead>
+    <thead><tr><th>Invoice no.</th><th>Date</th><th>Party</th><th class="num">Taxable value</th><th class="num">GST</th><th class="num">Total</th><th>Status</th><th></th></tr></thead>
     <tbody>
     {% for inv in invoices %}
       <tr>
@@ -35,10 +48,15 @@
         <td class="num">{{ inv.taxable_value|floatformat:2 }}</td>
         <td class="num">{{ inv.gst_total|floatformat:2 }}</td>
         <td class="num"><b>{{ inv.total|floatformat:2 }}</b></td>
-        <td class="actions"><a href="{% url 'invoice_print' inv.pk %}">Print</a> &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a></td>
+        <td>{% if inv.submitted_on %}<span class="badge ok">Submitted {{ inv.submitted_on|date:"d-m-Y" }}</span>{% else %}<span class="badge wait">Not submitted</span>{% endif %}</td>
+        <td class="actions">
+          <a href="{% url 'invoice_print' inv.pk %}">Print</a> &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a>
+          {% if not inv.submitted_on %}&middot;
+          <form method="post" action="{% url 'invoice_submit' inv.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="link">Mark submitted</button></form>{% endif %}
+        </td>
       </tr>
     {% empty %}
-      <tr><td colspan="7" class="empty">{% if q %}No invoices match your search.{% else %}No invoices yet. Create your first one with &ldquo;New invoice&rdquo;.{% endif %}</td></tr>
+      <tr><td colspan="8" class="empty">{% if q %}No invoices match your search.{% elif status == 'pending' %}Every bill has been submitted.{% elif status == 'submitted' %}No bill has been submitted yet.{% else %}No invoices yet. Create your first one with &ldquo;New invoice&rdquo;.{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>

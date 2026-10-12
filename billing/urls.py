@@ -9,5 +9,7 @@ urlpatterns = [
     path("save/", views.invoice_save, name="invoice_save"),
     path("<int:pk>/save/", views.invoice_save, name="invoice_update"),
     path("calc/", views.calc_api, name="calc_api"),
+    path("check-number/", views.check_number, name="check_number"),
+    path("<int:pk>/submit/", views.invoice_submit, name="invoice_submit"),
     path("<int:pk>/print/", views.invoice_print, name="invoice_print"),
 ]

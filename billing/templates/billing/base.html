@@ -25,6 +25,7 @@
     --bad-bg: rgba(240, 150, 155, .10);
     --bad-line: rgba(240, 150, 155, .35);
     --ok: #82d0a6;
+    --wait: #e8c36a;
     --radius: 8px;
   }
   * { box-sizing: border-box; }
@@ -92,6 +93,9 @@
   .muted { color: var(--muted); }
   .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 14px; background: var(--bad-bg); color: var(--bad); border: 1px solid var(--bad-line); }
   .msg ul { margin: 0; padding-left: 18px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; }
+  .badge.ok { color: var(--ok); border-color: rgba(130, 208, 166, .4); background: rgba(130, 208, 166, .08); }
+  .badge.wait { color: var(--wait); border-color: rgba(232, 195, 106, .45); background: rgba(232, 195, 106, .08); }
 
   @media print {
     header.top { display: none; }

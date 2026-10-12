@@ -29,7 +29,7 @@ class InvoiceItemInline(admin.TabularInline):
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ("invoice_no", "date", "party_name", "total")
+    list_display = ("invoice_no", "date", "party_name", "total", "submitted_on")
     search_fields = ("invoice_no", "party_name", "party_gstin")
     date_hierarchy = "date"
     inlines = [InvoiceItemInline]

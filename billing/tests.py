@@ -161,6 +161,59 @@ class BillingViewTests(TestCase):
         self.assertContains(self.client.get(reverse("invoice_edit", args=[inv_id])), "accounts@alpha.example")
 
 
+    def test_bill_is_submitted_by_default_and_can_be_left_pending(self):
+        self.save(payload())
+        self.assertIsNotNone(Invoice.objects.get(invoice_no="T-1").submitted_on)
+        self.save(payload(invoice_no="T-2", submitted=False))
+        self.assertIsNone(Invoice.objects.get(invoice_no="T-2").submitted_on)
+
+    def test_editing_keeps_the_original_submitted_date(self):
+        inv_id = self.save(payload()).json()["id"]
+        original = Invoice.objects.get(pk=inv_id).submitted_on
+        Invoice.objects.filter(pk=inv_id).update(submitted_on=datetime.date(2026, 9, 1))
+        self.save(payload(), reverse("invoice_update", args=[inv_id]))
+        self.assertEqual(Invoice.objects.get(pk=inv_id).submitted_on, datetime.date(2026, 9, 1))
+        self.assertNotEqual(original, datetime.date(2026, 9, 1))
+
+    def test_mark_submitted_and_back_to_pending(self):
+        inv_id = self.save(payload(submitted=False)).json()["id"]
+        url = reverse("invoice_submit", args=[inv_id])
+        r = self.client.post(url, {"next": reverse("invoice_list")})
+        self.assertEqual(r.status_code, 302)
+        self.assertIsNotNone(Invoice.objects.get(pk=inv_id).submitted_on)
+        self.client.post(url, {"action": "unsubmit", "next": reverse("invoice_list")})
+        self.assertIsNone(Invoice.objects.get(pk=inv_id).submitted_on)
+
+    def test_submit_requires_post_and_ignores_offsite_redirects(self):
+        inv_id = self.save(payload(submitted=False)).json()["id"]
+        url = reverse("invoice_submit", args=[inv_id])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        r = self.client.post(url, {"next": "https://evil.example/"})
+        self.assertEqual(r["Location"], reverse("invoice_list"))
+
+    def test_list_filters_by_status_and_shows_counts(self):
+        self.save(payload(invoice_no="T-1"))
+        self.save(payload(invoice_no="T-2", submitted=False))
+        r = self.client.get(reverse("invoice_list"), {"status": "pending"})
+        self.assertEqual([i.invoice_no for i in r.context["invoices"]], ["T-2"])
+        self.assertEqual(dict(r.context["counts"]), {"all": 2, "pending": 1, "submitted": 1})
+        r = self.client.get(reverse("invoice_list"), {"status": "submitted"})
+        self.assertEqual([i.invoice_no for i in r.context["invoices"]], ["T-1"])
+
+    def test_check_number_reports_duplicates(self):
+        inv_id = self.save(payload()).json()["id"]
+        url = reverse("check_number")
+        self.assertTrue(self.client.get(url, {"no": "T-1"}).json()["exists"])
+        self.assertFalse(self.client.get(url, {"no": "T-9"}).json()["exists"])
+        self.assertFalse(self.client.get(url, {"no": "T-1", "exclude": inv_id}).json()["exists"])
+
+    def test_form_shows_the_last_invoice(self):
+        self.assertIsNone(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"])
+        self.save(payload(invoice_no="T-1"))
+        self.save(payload(invoice_no="T-2"))
+        self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"]["no"], "T-2")
+
+
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):
         self.assertEqual(Invoice.next_number("INV", datetime.date(2026, 10, 12)), "INV/26-27/0001")
