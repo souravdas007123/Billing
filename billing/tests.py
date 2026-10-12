@@ -312,6 +312,14 @@ class BillingViewTests(TestCase):
         self.assertEqual([(x["rate"], x["cgst"], x["sgst"]) for x in data["summary"]], [("12", "30.00", "30.00"), ("18", "90.00", "90.00")])
 
 
+    def test_form_offers_the_unit_list_and_print_shows_dash_and_percent(self):
+        self.assertIn("Kg", self.client.get(reverse("invoice_new")).context["init"]["units"])
+        inv_id = self.save(payload()).json()["id"]
+        html = self.client.get(reverse("invoice_print", args=[inv_id])).content.decode()
+        self.assertIn("18%", html)       # GST rate with its % sign
+        self.assertIn(">-</td>", html)   # no discount -> a hyphen
+
+
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):
         self.assertEqual(Invoice.next_number("INV", datetime.date(2026, 10, 12)), "INV/26-27/0001")

@@ -72,5 +72,10 @@ LOGOUT_REDIRECT_URL = "login"
 
 # ---- Billing settings ----
 # GST rates shown in the dropdown. Confirm them with your accountant before changing.
+# Units offered in the billing screen's Unit drop-down (a unit from a pasted row or a product is added automatically).
+UNITS = [
+    "Nos", "Pcs", "Unit", "Set", "Pair", "Dozen", "Box", "Carton", "Pkt", "Pack", "Bag", "Bundle", "Roll", "Bottle", "Can",
+    "Kg", "Gm", "Ton", "Qtl", "Ltr", "Ml", "Mtr", "Cm", "Ft", "Inch", "Sqft", "Sqm", "Hrs", "Job",
+]
 GST_RATES = [Decimal(x) for x in ("0", "3", "5", "12", "18", "28", "40")]
 DEFAULT_GST_RATE = Decimal("18")

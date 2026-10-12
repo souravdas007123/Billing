@@ -54,6 +54,8 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - **Mixed GST rates**: each line is calculated with its own rate and the invoice totals are the sum of the lines. When a bill
   has more than one rate, a *Tax summary by GST rate* (taxable value, CGST / SGST or IGST, GST per rate) is shown under the
   totals on the billing screen and on the printed invoice. Its columns always add up to the invoice totals.
+- **Unit** is a drop-down (list in `config/settings.py` -> `UNITS`; a unit that comes from pasted rows or a product is added
+  automatically). On the printed invoice an empty discount shows `-` and GST / discount values carry a `%` sign.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

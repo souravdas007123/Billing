@@ -185,6 +185,8 @@
   $('default_gst').value = INIT.default_gst;
   INIT.parties.forEach(p => { const o = document.createElement('option'); o.value = p.name; $('party_list').appendChild(o); });
   INIT.products.forEach(p => { const o = document.createElement('option'); o.value = p.name; $('product_list').appendChild(o); });
+  const UNITS = INIT.units && INIT.units.length ? INIT.units : ['Nos'];
+  const unitOptions = '<option value="">-</option>' + UNITS.map(u => '<option value="' + u + '">' + u + '</option>').join('');
   const rateOptions = INIT.gst_rates.map(r => '<option value="' + r + '">' + r + '%</option>').join('');
 
   // ---------- entry mode (amount entry vs rate entry) ----------
@@ -265,6 +267,11 @@
   function set(tr, f, v) {
     const el = tr.querySelector('[data-f="' + f + '"]');
     if (f === 'gst_rate' && v !== '' && ![...el.options].some(o => o.value === String(v))) el.add(new Option(v + '%', v));
+    if (f === 'unit') {  // match the list ignoring case ("kg" -> "Kg"); an unknown unit is added to this line's list
+      v = v == null ? '' : String(v).trim();
+      const hit = [...el.options].find(o => o.value.toLowerCase() === v.toLowerCase());
+      if (hit) v = hit.value; else if (v) el.add(new Option(v, v));
+    }
     el.value = v == null ? '' : v;
   }
   const rowIsEmpty = tr => !get(tr, 'description').trim() && !get(tr, 'qty').trim() && !get(tr, isAmt() ? 'amount' : 'rate').trim();
@@ -279,7 +286,7 @@
       '<td><input data-f="description" list="product_list" autocomplete="off" maxlength="300" style="min-width:240px"></td>' +
       '<td><input data-f="hsn" maxlength="12" style="width:84px"></td>' +
       '<td><input data-f="qty" inputmode="decimal" class="num" style="width:76px"></td>' +
-      '<td><input data-f="unit" maxlength="20" style="width:64px"></td>' +
+      '<td><select data-f="unit" style="width:84px">' + unitOptions + '</select></td>' +
       '<td class="for-rate"><input data-f="rate" inputmode="decimal" class="num" style="width:96px"></td>' +
       '<td class="for-amt"><input data-f="amount" inputmode="decimal" class="num" style="width:110px"></td>' +
       '<td class="for-rate"><input data-f="discount_pct" inputmode="decimal" class="num" style="width:64px"></td>' +

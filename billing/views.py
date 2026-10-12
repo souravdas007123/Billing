@@ -394,6 +394,7 @@ def invoice_form(request, pk=None):
         "firm_state": firm.state,
         "state_codes": STATE_CODES,
         "gst_rates": [_plain(r) for r in settings.GST_RATES],
+        "units": list(getattr(settings, "UNITS", ["Nos"])),
         "default_gst": _plain(settings.DEFAULT_GST_RATE),
         "parties": list(Party.objects.values("id", "name", "address", "gstin", "state", "phone", "email")),
         "products": [
