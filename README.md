@@ -89,6 +89,15 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - Invalid entries (quantity 0, a missing rate or amount, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
 - The GSTIN checksum is verified (it shows a warning but does not block saving).
 
+## GST reports and party statement
+
+*GST reports* (top menu) gives, for a financial year or one month, CSV files for your GST return / CA: **B2B** (invoices and
+credit notes to registered buyers, rate-wise), **B2C** (unregistered buyers by place of supply and rate, net of credit notes)
+and an **HSN summary**. CGST and SGST are always equal halves. Only numbered, not-cancelled bills are included; estimates never.
+The *Documents issued* table lists every number series with first/last number, cancelled numbers and any **missing numbers**
+(these must be explained in the return). *Party statement* lists one party's bills for the year with a running total
+(credit notes deducted); it can be printed or downloaded. Payments are not tracked, so it is a statement of bills only.
+
 ## Importing many parties at once
 
 Admin -> Parties -> **Import parties**. Upload an Excel (.xlsx) or CSV file, or copy the rows in Excel (with the heading

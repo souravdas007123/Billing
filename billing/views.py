@@ -17,7 +17,8 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
-from .reports import build_report, fy_label, fy_start_year
+from .gst_returns import b2b_rows, b2c_rows, hsn_rows, series_summary
+from .reports import MONTH_NAMES as MONTH_LABELS, build_report, fy_label, fy_months, fy_start_year
 from .models import DOC_TYPES, GST_DOC_TYPES, STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product, doc_prefix
 
 MAX_ROWS = 500
@@ -664,3 +665,115 @@ def dashboard_export(request):
     for m in report["months"] + [report["totals"]]:
         w.writerow([m["label"], m["bills"], m["taxable"], m["cgst"], m["sgst"], m["igst"], m["gst"], m["round_off"], m["total"]])
     return response
+
+
+# ---------------- GST return data, series check, party statement ----------------
+
+def _period(request):
+    """(financial year start, first day, last day, month text) from ?fy=2026 and an optional ?month=2026-10."""
+    today = timezone.localdate()
+    try:
+        start = int(request.GET.get("fy", ""))
+        if not 2000 <= start <= 2100:
+            raise ValueError
+    except ValueError:
+        start = fy_start_year(today)
+    begin, end, month = datetime.date(start, 4, 1), datetime.date(start + 1, 3, 31), ""
+    m = re.fullmatch(r"(\d{4})-(\d{2})", request.GET.get("month", ""))
+    if m:
+        y, mo = int(m.group(1)), int(m.group(2))
+        if 1 <= mo <= 12 and begin <= datetime.date(y, mo, 1) <= end:
+            month = f"{y}-{mo:02d}"
+            begin = datetime.date(y, mo, 1)
+            end = (datetime.date(y + (mo == 12), mo % 12 + 1, 1)) - datetime.timedelta(days=1)
+    return start, begin, end, month
+
+
+def _return_data(begin, end):
+    """Active, numbered tax invoices / bills of supply / credit notes of the period, with their lines."""
+    qs = Invoice.objects.filter(invoice_no__isnull=False, date__gte=begin, date__lte=end, status="ACTIVE").exclude(doc_type="EST")
+    invoices = list(qs.values("id", "invoice_no", "date", "doc_type", "party_name", "party_gstin", "place_of_supply",
+                              "is_intra_state", "total", "ref_no", "ref_date"))
+    items = list(InvoiceItem.objects.filter(invoice__in=qs).values("invoice_id", "hsn", "unit", "qty", "gst_rate", "taxable", "gst_amount"))
+    return invoices, items
+
+
+def _csv_response(name, header, rows):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{name}.csv"'
+    response.write("\ufeff")
+    w = csv.writer(response)
+    w.writerow(header)
+    for r in rows:
+        w.writerow(r)
+    return response
+
+
+@login_required
+def gst_reports(request):
+    start, begin, end, month = _period(request)
+    # the series check always looks at the whole financial year: a gap is a gap whatever month is chosen
+    docs = Invoice.objects.filter(invoice_no__isnull=False, date__gte=datetime.date(start, 4, 1),
+                                  date__lte=datetime.date(start + 1, 3, 31)).values("invoice_no", "doc_type", "status")
+    series = series_summary(list(docs))
+    invoices, items = _return_data(begin, end)
+    b2b, b2c, hsn = b2b_rows(invoices, items), b2c_rows(invoices, items), hsn_rows(invoices, items)
+    months = [{"value": f"{y}-{m:02d}", "label": f"{MONTH_LABELS[m - 1]} {y}"} for y, m in fy_months(start)]
+    return render(request, "billing/gst_reports.html", {
+        "series": series, "b2b_count": len(b2b), "b2c_count": len(b2c), "hsn_count": len(hsn),
+        "fy": start, "fy_label": fy_label(start), "month": month, "months": months,
+        "fy_options": [{"value": y, "label": fy_label(y)} for y in range(fy_start_year(timezone.localdate()) + 1, fy_start_year(timezone.localdate()) - 6, -1)],
+        "has_gap": any(r["missing"] for r in series),
+    })
+
+
+@login_required
+def gst_export(request, kind):
+    start, begin, end, month = _period(request)
+    tag = f"FY{fy_label(start)}" + (f"-{month}" if month else "")
+    invoices, items = _return_data(begin, end)
+    if kind == "b2b":
+        rows = [[r["gstin"], r["party"], r["note_type"], r["invoice_no"], r["date"].strftime("%d-%m-%Y"), r["ref_no"], r["invoice_value"],
+                 r["place_of_supply"], r["rate"], r["taxable"], r["igst"], r["cgst"], r["sgst"]] for r in b2b_rows(invoices, items)]
+        return _csv_response(f"GSTR1-B2B-{tag}", ["GSTIN of buyer", "Buyer name", "Document", "Number", "Date", "Against invoice", "Document value",
+                                                 "Place of supply", "GST rate %", "Taxable value", "IGST", "CGST", "SGST"], rows)
+    if kind == "b2c":
+        rows = [[r["place_of_supply"], r["rate"], r["taxable"], r["igst"], r["cgst"], r["sgst"]] for r in b2c_rows(invoices, items)]
+        return _csv_response(f"GSTR1-B2C-{tag}", ["Place of supply", "GST rate %", "Taxable value (net of credit notes)", "IGST", "CGST", "SGST"], rows)
+    if kind == "hsn":
+        rows = [[r["hsn"], r["unit"], r["qty"], r["rate"], r["value"], r["taxable"], r["igst"], r["cgst"], r["sgst"]] for r in hsn_rows(invoices, items)]
+        return _csv_response(f"GSTR1-HSN-{tag}", ["HSN", "Unit", "Quantity", "GST rate %", "Total value", "Taxable value", "IGST", "CGST", "SGST"], rows)
+    if kind == "series":
+        docs = Invoice.objects.filter(invoice_no__isnull=False, date__gte=datetime.date(start, 4, 1),
+                                      date__lte=datetime.date(start + 1, 3, 31)).values("invoice_no", "doc_type", "status")
+        rows = [[r["label"], r["series"], r["first"], r["last"], r["count"], r["cancelled_count"], ", ".join(r["cancelled"]), ", ".join(r["missing"])]
+                for r in series_summary(list(docs))]
+        return _csv_response(f"Documents-issued-FY{fy_label(start)}", ["Document", "Series", "From", "To", "Issued", "Cancelled", "Cancelled numbers", "Missing numbers"], rows)
+    return HttpResponse("Unknown report.", status=404)
+
+
+@login_required
+def party_statement(request):
+    """All bills of one party in a financial year with a running total (bills only; payments are not tracked here)."""
+    start, begin, end, month = _period(request)
+    begin, end = datetime.date(start, 4, 1), datetime.date(start + 1, 3, 31)
+    names = list(Invoice.objects.filter(invoice_no__isnull=False).exclude(doc_type="EST").order_by("party_name")
+                 .values_list("party_name", flat=True).distinct())
+    name = request.GET.get("party", "").strip()
+    rows, running, total = [], Decimal("0.00"), None
+    if name:
+        for inv in Invoice.objects.filter(invoice_no__isnull=False, party_name__iexact=name, status="ACTIVE", date__gte=begin, date__lte=end) \
+                .exclude(doc_type="EST").order_by("date", "id"):
+            amount = -inv.total if inv.doc_type == "CN" else inv.total
+            running += amount
+            rows.append({"inv": inv, "amount": amount, "running": running})
+        total = running
+        if request.GET.get("csv"):
+            return _csv_response(f"Statement-{re.sub(r'[^A-Za-z0-9]+', '_', name)}-FY{fy_label(start)}",
+                                 ["Date", "Document", "Number", "Amount", "Running total"],
+                                 [[r["inv"].date.strftime("%d-%m-%Y"), r["inv"].get_doc_type_display(), r["inv"].invoice_no, r["amount"], r["running"]] for r in rows])
+    return render(request, "billing/party_statement.html", {
+        "names": sorted({n.strip() for n in names if n and n.strip()}, key=str.lower), "name": name, "rows": rows, "total": total,
+        "fy": start, "fy_label": fy_label(start),
+        "fy_options": [{"value": y, "label": fy_label(y)} for y in range(fy_start_year(timezone.localdate()) + 1, fy_start_year(timezone.localdate()) - 6, -1)],
+    })

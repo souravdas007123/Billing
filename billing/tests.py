@@ -429,6 +429,39 @@ class BillingViewTests(TestCase):
         self.assertEqual(r.context["init"]["invoice"]["doc_type"], "TAX")
         self.assertTrue(r.context["init"]["invoice"]["notice"])
 
+    # ---------- GST reports and party statement ----------
+    def test_gst_reports_and_exports(self):
+        self.issue(party_gstin="19AAACG1234A1Z5")
+        self.issue()
+        r = self.client.get(reverse("gst_reports"))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(r.context["has_gap"])
+        self.assertEqual((r.context["b2b_count"], r.context["b2c_count"]), (1, 1))
+        for kind in ("b2b", "b2c", "hsn", "series"):
+            resp = self.client.get(reverse("gst_export", args=[kind]) + "?month=2026-10")
+            self.assertEqual(resp.status_code, 200, kind)
+            self.assertIn("text/csv", resp["Content-Type"])
+        b2b = self.client.get(reverse("gst_export", args=["b2b"])).content.decode("utf-8-sig").splitlines()
+        self.assertEqual(len(b2b), 2)
+        self.assertIn("19AAACG1234A1Z5", b2b[1])
+        self.assertEqual(self.client.get(reverse("gst_export", args=["nope"])).status_code, 404)
+
+    def test_gst_reports_show_gap(self):
+        self.issue()
+        self.issue(invoice_no="INV/26-27/0009")
+        self.assertTrue(self.client.get(reverse("gst_reports")).context["has_gap"])
+
+    def test_party_statement(self):
+        self.issue()
+        self.issue(doc_type="CN", ref_no="X", ref_date="2026-10-12")
+        r = self.client.get(reverse("party_statement") + "?party=alpha traders&fy=2026")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(len(r.context["rows"]), 2)
+        self.assertEqual(r.context["total"], 0)
+        csv_resp = self.client.get(reverse("party_statement") + "?party=Alpha Traders&fy=2026&csv=1")
+        self.assertIn("text/csv", csv_resp["Content-Type"])
+        self.assertEqual(self.client.get(reverse("party_statement")).status_code, 200)
+
 
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):

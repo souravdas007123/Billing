@@ -1,0 +1,51 @@
+{% extends "billing/base.html" %}
+{% load billing_extras %}
+{% block title %}Party statement{% endblock %}
+{% block head %}
+<style>
+  .rep-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .rep-head h2 { margin:0; }
+  .rep-head .sp { flex:1; }
+  .rep-head select, .rep-head input { width:auto; margin:0; min-width:220px; }
+  .tbl-wrap { overflow-x:auto; }
+  td, th { padding:8px; }
+  tr.total td { font-weight:700; border-top:2px solid var(--line); }
+  .note { font-size:12px; color:var(--muted); margin-top:10px; }
+  @media print { header.top, .rep-head form, .rep-head .btn { display:none !important; } }
+</style>
+{% endblock %}
+{% block content %}
+<div class="rep-head">
+  <h2>Party statement</h2>
+  <span class="sp"></span>
+  <form method="get" style="display:flex; gap:8px; flex-wrap:wrap">
+    <input name="party" list="parties" value="{{ name }}" placeholder="Party name" aria-label="Party" autocomplete="off">
+    <datalist id="parties">{% for n in names %}<option value="{{ n }}">{% endfor %}</datalist>
+    <select name="fy" aria-label="Financial year">
+      {% for o in fy_options %}<option value="{{ o.value }}"{% if o.value == fy %} selected{% endif %}>FY {{ o.label }}</option>{% endfor %}
+    </select>
+    <button class="primary" type="submit">Show</button>
+  </form>
+  {% if name and rows %}<a class="btn" href="?party={{ name|urlencode }}&amp;fy={{ fy }}&amp;csv=1">Download CSV</a>
+  <button type="button" onclick="window.print()">Print</button>{% endif %}
+</div>
+<div class="card">
+  {% if not name %}<p class="note">Choose a party to see all its bills in the financial year.</p>
+  {% elif not rows %}<p class="note">No bill found for &ldquo;{{ name }}&rdquo; in FY {{ fy_label }}.</p>
+  {% else %}
+  <h3 style="margin-top:0">{{ name }} &mdash; FY {{ fy_label }}</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Date</th><th>Document</th><th>Number</th><th class="num">Amount</th><th class="num">Running total</th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr><td>{{ r.inv.date|date:"d-m-Y" }}</td><td>{{ r.inv.get_doc_type_display }}</td>
+          <td><a href="{% url 'invoice_print' r.inv.pk %}">{{ r.inv.invoice_no }}</a></td>
+          <td class="num">{{ r.amount|inr }}</td><td class="num">{{ r.running|inr }}</td></tr>
+    {% endfor %}
+      <tr class="total"><td colspan="3">Total billed (credit notes deducted)</td><td class="num"></td><td class="num">&#8377; {{ total|inr }}</td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">This statement lists bills only. Cancelled bills and estimates are left out. Payments received are not recorded in this app.</p>
+  {% endif %}
+</div>
+{% endblock %}

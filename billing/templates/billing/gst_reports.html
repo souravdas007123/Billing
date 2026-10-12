@@ -1,0 +1,70 @@
+{% extends "billing/base.html" %}
+{% block title %}GST reports{% endblock %}
+{% block head %}
+<style>
+  .rep-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .rep-head h2 { margin:0; }
+  .rep-head .sp { flex:1; }
+  .rep-head select { width:auto; margin:0; }
+  .dl { display:grid; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr)); gap:12px; margin-bottom:18px; }
+  .dl .card h3 { margin:0 0 4px; font-size:15px; }
+  .dl .card p { margin:0 0 12px; font-size:12.5px; color:var(--muted); min-height:34px; }
+  .tbl-wrap { overflow-x:auto; }
+  td, th { padding:8px; }
+  .bad { color:var(--bad); }
+  .good { color:var(--ok); }
+  .note { font-size:12px; color:var(--muted); margin-top:10px; }
+  .chips { display:flex; flex-wrap:wrap; gap:4px; }
+  .chips span { font-size:12px; padding:1px 7px; border:1px solid var(--line); border-radius:10px; white-space:nowrap; }
+  .chips.miss span { border-color:var(--bad-line); color:var(--bad); }
+</style>
+{% endblock %}
+{% block content %}
+<div class="rep-head">
+  <h2>GST reports</h2>
+  <span class="sp"></span>
+  <form method="get" style="display:flex; gap:8px; flex-wrap:wrap">
+    <select name="fy" aria-label="Financial year" onchange="this.form.submit()">
+      {% for o in fy_options %}<option value="{{ o.value }}"{% if o.value == fy %} selected{% endif %}>FY {{ o.label }}</option>{% endfor %}
+    </select>
+    <select name="month" aria-label="Month" onchange="this.form.submit()">
+      <option value="">Whole year</option>
+      {% for m in months %}<option value="{{ m.value }}"{% if m.value == month %} selected{% endif %}>{{ m.label }}</option>{% endfor %}
+    </select>
+  </form>
+  <a class="btn" href="{% url 'party_statement' %}?fy={{ fy }}">Party statement</a>
+</div>
+
+<div class="dl">
+  <div class="card"><h3>B2B (registered buyers)</h3><p>Invoices and credit notes, rate-wise. {{ b2b_count }} row{{ b2b_count|pluralize }}.</p>
+    <a class="btn" href="{% url 'gst_export' 'b2b' %}?fy={{ fy }}&amp;month={{ month }}">Download CSV</a></div>
+  <div class="card"><h3>B2C (unregistered buyers)</h3><p>By place of supply and rate, net of credit notes. {{ b2c_count }} row{{ b2c_count|pluralize }}.</p>
+    <a class="btn" href="{% url 'gst_export' 'b2c' %}?fy={{ fy }}&amp;month={{ month }}">Download CSV</a></div>
+  <div class="card"><h3>HSN summary</h3><p>Quantity, taxable value and tax by HSN and rate. {{ hsn_count }} row{{ hsn_count|pluralize }}.</p>
+    <a class="btn" href="{% url 'gst_export' 'hsn' %}?fy={{ fy }}&amp;month={{ month }}">Download CSV</a></div>
+</div>
+
+<div class="card">
+  <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px">
+    <h3 style="margin:0">Documents issued &mdash; FY {{ fy_label }}</h3><span style="flex:1"></span>
+    <a class="btn" href="{% url 'gst_export' 'series' %}?fy={{ fy }}">Download CSV</a>
+  </div>
+  {% if series %}
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Document</th><th>Series</th><th>From</th><th>To</th><th class="num">Issued</th><th class="num">Cancelled</th><th>Missing numbers</th></tr></thead>
+    <tbody>
+    {% for r in series %}
+      <tr>
+        <td>{{ r.label }}</td><td>{{ r.series }}</td><td>{{ r.first }}</td><td>{{ r.last }}</td>
+        <td class="num">{{ r.count }}</td>
+        <td class="num">{{ r.cancelled_count }}{% if r.cancelled %}<div class="chips" style="justify-content:flex-end">{% for n in r.cancelled %}<span>{{ n }}</span>{% endfor %}</div>{% endif %}</td>
+        <td>{% if r.missing %}<div class="chips miss">{% for n in r.missing %}<span>{{ n }}</span>{% endfor %}</div>{% else %}<span class="good">None</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}<p class="note">No numbered bill in this financial year.</p>{% endif %}
+  <p class="note">{% if has_gap %}<span class="bad">A number is missing from a series.</span> Cancelled bills are not missing (they keep their number). A missing number can only come from a bill saved with a typed number; explain it in your GST return.{% else %}No gaps: every number between the first and the last is accounted for. Cancelled bills keep their number.{% endif %}
+  Estimates have their own series and are not part of any GST figure. Only active (not cancelled) bills are in the three downloads above.</p>
+</div>
+{% endblock %}
