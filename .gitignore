@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Local database (har computer ka apna data)
+db.sqlite3
+db.sqlite3-journal
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
