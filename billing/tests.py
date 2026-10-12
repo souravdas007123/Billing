@@ -473,6 +473,19 @@ class BillingViewTests(TestCase):
     def test_backup_download_is_superuser_only(self):
         self.assertEqual(self.client.get(reverse("backup_download")).status_code, 403)
 
+    def test_list_filters_and_pages(self):
+        for i in range(52):
+            self.issue(party_name=f"Party {i:02d}")
+        self.issue(doc_type="EST", party_name="Quote Co")
+        r = self.client.get(reverse("invoice_list"))
+        self.assertEqual(len(r.context["invoices"]), 50)
+        self.assertEqual(r.context["pg"].paginator.num_pages, 2)
+        self.assertEqual(len(self.client.get(reverse("invoice_list") + "?page=2").context["invoices"]), 3)
+        self.assertEqual(len(self.client.get(reverse("invoice_list") + "?type=EST").context["invoices"]), 1)
+        self.assertEqual(len(self.client.get(reverse("invoice_list") + "?from=2030-01-01").context["invoices"]), 0)
+        self.assertEqual(len(self.client.get(reverse("invoice_list") + "?q=Party 07").context["invoices"]), 1)
+        self.assertEqual(self.client.get(reverse("invoice_list") + "?from=junk&type=zzz&page=99").status_code, 200)
+
 
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):

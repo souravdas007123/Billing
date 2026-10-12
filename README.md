@@ -75,6 +75,8 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - The **Copy** button repeats a bill for the same party with today's date and a fresh number. the **Make tax invoice** button on an
   estimate (or bill of supply) copies it into a new Tax invoice; GST is added on top of the prices, so check the GST rate of
   each line before saving.
+- **All invoices** can be filtered by text, document type and date range (the filters stay when you switch tabs or pages),
+  and is shown 50 bills per page.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

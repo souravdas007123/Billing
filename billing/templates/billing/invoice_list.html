@@ -4,8 +4,11 @@
 <style>
   .list-head { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
   .list-head h2 { margin: 0; }
-  .list-head .search { display: flex; gap: 6px; margin: 0; }
-  .list-head .search input { width: 280px; margin: 0; }
+  form.filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
+  form.filters input, form.filters select { width: auto; margin: 0; }
+  form.filters input[name=q] { width: 250px; max-width: 100%; }
+  form.filters label { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); font-size: 13px; }
+  .pager { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 14px 0; color: var(--muted); font-size: 13px; }
   .list-table td, .list-table th { padding: 10px 12px; }
   .list-table tbody tr:hover { background: var(--raised); }
   .list-table tbody tr:last-child td { border-bottom: 0; }
@@ -26,17 +29,22 @@
 <div class="list-head">
   <h2>All invoices</h2>
   <span style="flex:1"></span>
-  <form method="get" class="search">
-    <input name="q" value="{{ q }}" placeholder="Invoice no., party or GSTIN">
-    <button type="submit">Search</button>
-  </form>
   <a class="btn primary" href="{% url 'invoice_new' %}">New invoice</a>
 </div>
+<form method="get" class="filters">
+  {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}
+  <input name="q" value="{{ q }}" placeholder="Invoice no., party or GSTIN" aria-label="Search">
+  <select name="type" aria-label="Document type"><option value="">All types</option>{% for code, label in doc_types %}<option value="{{ code }}"{% if code == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <label>From <input type="date" name="from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="to" value="{{ date_to }}"></label>
+  <button type="submit">Filter</button>
+  {% if filtered %}<a class="btn" href="?{% if status %}status={{ status }}{% endif %}">Clear</a>{% endif %}
+</form>
 <div class="tabs">
-  <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not status %} class="active"{% endif %}>All<span class="n">{{ counts.all }}</span></a>
-  <a href="?status=pending{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'pending' %} class="active"{% endif %}>Not submitted<span class="n">{{ counts.pending }}</span></a>
-  <a href="?status=submitted{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'submitted' %} class="active"{% endif %}>Submitted<span class="n">{{ counts.submitted }}</span></a>
-  <a href="?status=cancelled{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'cancelled' %} class="active"{% endif %}>Cancelled<span class="n">{{ counts.cancelled }}</span></a>
+  <a href="?{{ keep_qs }}"{% if not status %} class="active"{% endif %}>All<span class="n">{{ counts.all }}</span></a>
+  <a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}status=pending"{% if status == 'pending' %} class="active"{% endif %}>Not submitted<span class="n">{{ counts.pending }}</span></a>
+  <a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}status=submitted"{% if status == 'submitted' %} class="active"{% endif %}>Submitted<span class="n">{{ counts.submitted }}</span></a>
+  <a href="?{% if keep_qs %}{{ keep_qs }}&amp;{% endif %}status=cancelled"{% if status == 'cancelled' %} class="active"{% endif %}>Cancelled<span class="n">{{ counts.cancelled }}</span></a>
 </div>
 <div class="card" style="padding:0;overflow:hidden">
   <table class="list-table">
@@ -52,15 +60,22 @@
         <td class="num"><b>{{ inv.total|floatformat:2 }}</b></td>
         <td>{% if inv.is_cancelled %}<span class="badge" style="color:var(--bad);border-color:var(--bad-line)">Cancelled</span>{% elif inv.submitted_on %}<span class="badge ok">Submitted {{ inv.submitted_on|date:"d-m-Y" }}</span>{% else %}<span class="badge wait">Not submitted</span>{% endif %}</td>
         <td class="actions">
-          <a href="{% url 'invoice_print' inv.pk %}">Print</a> &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a>
-          {% if not inv.submitted_on %}&middot;
+          <a href="{% url 'invoice_print' inv.pk %}">Print</a>{% if not inv.is_cancelled %} &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a>{% endif %}
+          {% if not inv.submitted_on and not inv.is_cancelled %}&middot;
           <form method="post" action="{% url 'invoice_submit' inv.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="link">Submit &amp; get number</button></form>{% endif %}
         </td>
       </tr>
     {% empty %}
-      <tr><td colspan="8" class="empty">{% if q %}No invoices match your search.{% elif status == 'pending' %}Every bill has been submitted.{% elif status == 'submitted' %}No bill has been submitted yet.{% elif status == 'cancelled' %}No bill has been cancelled.{% else %}No invoices yet. Create your first one with &ldquo;New invoice&rdquo;.{% endif %}</td></tr>
+      <tr><td colspan="8" class="empty">{% if filtered %}No invoices match these filters.{% elif status == 'pending' %}Every bill has been submitted.{% elif status == 'submitted' %}No bill has been submitted yet.{% elif status == 'cancelled' %}No bill has been cancelled.{% else %}No invoices yet. Create your first one with &ldquo;New invoice&rdquo;.{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>
 </div>
+{% if pg.paginator.num_pages > 1 %}
+<div class="pager">
+  {% if pg.has_previous %}<a class="btn" href="?{% if page_qs %}{{ page_qs }}&amp;{% endif %}page={{ pg.previous_page_number }}">&larr; Newer</a>{% endif %}
+  <span>Page {{ pg.number }} of {{ pg.paginator.num_pages }} &middot; {{ pg.paginator.count }} bill{{ pg.paginator.count|pluralize }}</span>
+  {% if pg.has_next %}<a class="btn" href="?{% if page_qs %}{{ page_qs }}&amp;{% endif %}page={{ pg.next_page_number }}">Older &rarr;</a>{% endif %}
+</div>
+{% endif %}
 {% endblock %}

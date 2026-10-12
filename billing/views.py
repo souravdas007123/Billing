@@ -5,6 +5,7 @@ import re
 from decimal import Decimal
 
 from django.conf import settings
+from django.core.paginator import Paginator
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
 from django.contrib import messages
@@ -13,7 +14,7 @@ from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirec
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
@@ -485,14 +486,33 @@ def invoice_form(request, pk=None):
     return render(request, "billing/invoice_form.html", {"init": init, "editing": invoice})
 
 
+LIST_PAGE_SIZE = 50
+
+
+def _date_param(value):
+    try:
+        return datetime.date.fromisoformat((value or "").strip())
+    except ValueError:
+        return None
+
+
 @login_required
 def invoice_list(request):
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
     status = status if status in ("pending", "submitted", "cancelled") else ""
+    kind = request.GET.get("type", "")
+    kind = kind if kind in dict(DOC_TYPES) else ""
+    date_from, date_to = _date_param(request.GET.get("from")), _date_param(request.GET.get("to"))
     qs = Invoice.objects.all()
     if q:
         qs = qs.filter(Q(invoice_no__icontains=q) | Q(party_name__icontains=q) | Q(party_gstin__icontains=q))
+    if kind:
+        qs = qs.filter(doc_type=kind)
+    if date_from:
+        qs = qs.filter(date__gte=date_from)
+    if date_to:
+        qs = qs.filter(date__lte=date_to)
     if status == "pending":
         qs = qs.filter(submitted_on__isnull=True)
     elif status == "submitted":
@@ -504,10 +524,18 @@ def invoice_list(request):
     total_count = Invoice.objects.count()
     counts = {"all": total_count, "pending": pending_count, "cancelled": cancelled_count,
               "submitted": total_count - pending_count - cancelled_count}
+    # the filters are kept in every tab and page link (the page number and, for tabs, the status are left out)
+    keep = {k: v for k, v in (("q", q), ("type", kind), ("from", date_from.isoformat() if date_from else ""),
+                              ("to", date_to.isoformat() if date_to else "")) if v}
+    page = Paginator(qs, LIST_PAGE_SIZE).get_page(request.GET.get("page"))
     return render(
         request,
         "billing/invoice_list.html",
-        {"invoices": qs[:200], "q": q, "status": status, "counts": counts},
+        {"invoices": page, "pg": page, "q": q, "status": status, "counts": counts, "kind": kind,
+         "date_from": date_from.isoformat() if date_from else "", "date_to": date_to.isoformat() if date_to else "",
+         "doc_types": DOC_TYPES, "keep_qs": urlencode(keep),
+         "page_qs": urlencode({**keep, **({"status": status} if status else {})}),
+         "filtered": bool(keep)},
     )
 
 

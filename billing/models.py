@@ -156,6 +156,13 @@ class Invoice(models.Model):
     class Meta:
         ordering = ["-date", "-id"]
         permissions = [("cancel_invoice", "Can cancel invoices")]
+        indexes = [
+            models.Index(fields=["date"], name="inv_date_idx"),
+            models.Index(fields=["doc_type", "date"], name="inv_type_date_idx"),
+            models.Index(fields=["party_name"], name="inv_party_idx"),
+            models.Index(fields=["status"], name="inv_status_idx"),
+            models.Index(fields=["submitted_on"], name="inv_submitted_idx"),
+        ]
 
     def __str__(self):
         return f"{self.invoice_no or 'Draft'} - {self.party_name}"
