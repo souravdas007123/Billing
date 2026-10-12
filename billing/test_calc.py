@@ -57,10 +57,10 @@ class InvoiceTests(unittest.TestCase):
         ]
         inv = compute_invoice(items, inclusive=False, intra=True)
         self.assertEqual(inv["taxable"], Dc("600.50"))
-        # gst: 18.09 + 25.00 = 43.09 ; exact total 643.59 -> 644
-        self.assertEqual(inv["gst_total"], Dc("43.09"))
+        # gst per line, two equal halves: 18.09 -> 9.05 + 9.05 = 18.10 ; 25.00 ; total 43.10 ; exact total 643.60 -> 644
+        self.assertEqual(inv["gst_total"], Dc("43.10"))
         self.assertEqual(inv["total"], Dc("644"))
-        self.assertEqual(inv["round_off"], Dc("0.41"))
+        self.assertEqual(inv["round_off"], Dc("0.40"))
         self.assertEqual(inv["taxable"] + inv["gst_total"] + inv["round_off"], inv["total"])
         self.assertEqual(inv["cgst"] + inv["sgst"], inv["gst_total"])
 
@@ -94,11 +94,11 @@ class AmountModeTests(unittest.TestCase):
     def test_awkward_amount_still_adds_up(self):
         l = compute_line_from_amount("3", "100", "18", intra=True)
         self.assertEqual(l["total"], Dc("100.00"))
-        self.assertEqual(l["taxable"], Dc("84.75"))
-        self.assertEqual(l["gst"], Dc("15.25"))
+        self.assertEqual(l["taxable"], Dc("84.74"))  # GST 15.26 = 7.63 + 7.63 (the taxable value takes the odd paisa)
+        self.assertEqual(l["gst"], Dc("15.26"))
         self.assertEqual(l["taxable"] + l["gst"], l["total"])
         self.assertEqual(l["cgst"] + l["sgst"], l["gst"])
-        self.assertEqual(l["rate"], Dc("28.2500"))
+        self.assertEqual(l["rate"], Dc("28.2467"))
 
     def test_blank_or_zero_qty_counts_as_one(self):
         self.assertEqual(compute_line_from_amount("", "118", "18", True)["rate"], Dc("100.0000"))
@@ -205,6 +205,33 @@ class RateSummaryTests(unittest.TestCase):
 
     def test_all_blank_gives_empty_summary(self):
         self.assertEqual(compute_invoice([{}, {}], False, True)["summary"], [])
+
+
+class EqualHalvesTests(unittest.TestCase):
+    def test_cgst_and_sgst_are_always_equal_on_a_same_state_bill(self):
+        import random
+        rnd = random.Random(7)
+        for _ in range(3000):
+            rate = str(rnd.choice([0, 3, 5, 12, 18, 28, 40]))
+            amount = str(rnd.randint(1, 5_000_000) / 100)
+            for inclusive in (True, False):
+                l = compute_line("1", amount, "0", rate, inclusive, True)
+                self.assertEqual(l["cgst"], l["sgst"], (rate, amount, inclusive))
+                self.assertEqual(l["cgst"] + l["sgst"], l["gst"])
+                self.assertEqual(l["taxable"] + l["gst"], l["total"])
+            a = compute_line_from_amount("1", amount, rate, True)
+            self.assertEqual(a["total"], Dc(amount).quantize(Dc("0.01")))  # the typed amount is never changed
+            self.assertEqual(a["cgst"], a["sgst"])
+
+    def test_invoice_totals_stay_equal(self):
+        items = [{"qty": "1", "amount": "1000", "gst_rate": "18"}, {"qty": "2", "amount": "1300", "gst_rate": "18"}]
+        inv = compute_invoice(items, inclusive=True, intra=True, amount_mode=True)
+        self.assertEqual((inv["cgst"], inv["sgst"]), (Dc("175.42"), Dc("175.42")))
+        self.assertEqual(inv["lines"][1]["taxable"], Dc("1101.70"))
+        self.assertEqual((inv["lines"][1]["cgst"], inv["lines"][1]["sgst"]), (Dc("99.15"), Dc("99.15")))
+        self.assertEqual(inv["total"], Dc("2300"))
+        for x in inv["summary"]:
+            self.assertEqual(x["cgst"], x["sgst"])
 
 
 if __name__ == "__main__":

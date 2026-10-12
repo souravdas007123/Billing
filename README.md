@@ -63,7 +63,9 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - The final calculation always happens on the server in `billing/calc.py`, using Decimal (never floats). What you see on screen is exactly what is saved.
 - Amount entry: the line total is exactly the amount you typed. The taxable value and GST are taken out of it, and the rate is the taxable value divided by the quantity.
 - GST excluded: GST is added on top of the taxable value. GST included: the GST is taken out of the rate, and the line total stays equal to what the rate gives.
-- GST is rounded per line, and CGST + SGST always add up to the GST. The invoice total is rounded to the nearest rupee.
+- GST is rounded per line. On a same-state bill CGST and SGST are always **exactly equal** (the half is rounded first). When
+  you type an amount with GST included, the amount never changes and the taxable value takes any odd paisa. The invoice
+  total is rounded to the nearest rupee. Bills saved before this rule keep the figures they were saved with.
 - The party's details are copied onto the invoice, so editing a party later does not change old invoices.
 - Invalid entries (quantity 0, a missing rate or amount, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
 - The GSTIN checksum is verified (it shows a warning but does not block saving).

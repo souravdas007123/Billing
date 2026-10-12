@@ -36,15 +36,21 @@ def q2(value):
 
 
 def compute_line(qty, rate, discount_pct, gst_rate, inclusive, intra):
+    """One line. Same-state bills split the GST into two EQUAL halves (CGST = SGST, to the paisa):
+    the half is rounded first, and the line's taxable value absorbs any odd paisa when the amount includes GST."""
     qty, rate, discount_pct, gst_rate = D(qty), D(rate), D(discount_pct), D(gst_rate)
     net = qty * rate * (HUNDRED - discount_pct) / HUNDRED
     if inclusive:
         total = q2(net)
-        taxable = q2(total * HUNDRED / (HUNDRED + gst_rate))
-        gst = total - taxable
+        if intra:
+            gst = 2 * q2(total * gst_rate / (2 * (HUNDRED + gst_rate)))
+            taxable = total - gst
+        else:
+            taxable = q2(total * HUNDRED / (HUNDRED + gst_rate))
+            gst = total - taxable
     else:
         taxable = q2(net)
-        gst = q2(taxable * gst_rate / HUNDRED)
+        gst = 2 * q2(taxable * gst_rate / (2 * HUNDRED)) if intra else q2(taxable * gst_rate / HUNDRED)
         total = taxable + gst
     cgst, sgst, igst = split_gst(gst, intra)
     return {
@@ -58,7 +64,7 @@ def compute_line(qty, rate, discount_pct, gst_rate, inclusive, intra):
 
 
 def split_gst(gst, intra):
-    """One line's GST as (CGST, SGST, IGST). Same state: CGST is half rounded, SGST the rest, so they always add up to GST."""
+    """One line's GST as (CGST, SGST, IGST). Same state: two equal halves (a bill saved before this rule can have an odd paisa; CGST gets the extra one)."""
     if intra:
         cgst = q2(gst / 2)
         return cgst, gst - cgst, Decimal("0.00")
