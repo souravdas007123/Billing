@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .calc import D, amount_in_words, compute_invoice, q2
+from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
 from .reports import build_report, fy_label, fy_start_year
 from .models import STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product
 
@@ -61,6 +61,7 @@ def _serialize(result):
     out = {k: _money(result[k]) for k in ("taxable", "cgst", "sgst", "igst", "gst_total", "round_off", "total")}
     out["words"] = result["words"]
     out["intra"] = result["intra"]
+    out["summary"] = [{k: (_plain(v) if k == "rate" else _money(v)) for k, v in row.items()} for row in result["summary"]]
     out["lines"] = [{k: _money(q2(v) if k == "rate" else v) for k, v in line.items()} for line in result["lines"]]
     return out
 
@@ -451,6 +452,15 @@ def invoice_submit(request, pk):
     return HttpResponseRedirect(target)
 
 
+def _stored_summary(invoice, items):
+    """Tax summary by rate for a saved invoice, from its stored lines (same rounding rule as when it was calculated)."""
+    entries = []
+    for it in items:
+        cgst, sgst, igst = split_gst(it.gst_amount, invoice.is_intra_state)
+        entries.append((it.gst_rate, {"taxable": it.taxable, "gst": it.gst_amount, "cgst": cgst, "sgst": sgst, "igst": igst}))
+    return rate_summary(entries)
+
+
 @login_required
 def invoice_print(request, pk):
     invoice = get_object_or_404(Invoice.objects.prefetch_related("items"), pk=pk)
@@ -466,6 +476,7 @@ def invoice_print(request, pk):
             "pos_code": STATE_CODES.get(invoice.place_of_supply, ""),
             "words": amount_in_words(invoice.total),
             "inclusive": invoice.price_mode == "INCL",
+            "summary": _stored_summary(invoice, invoice.items.all()),
         },
     )
 

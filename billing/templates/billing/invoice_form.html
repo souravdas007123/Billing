@@ -21,6 +21,10 @@
   .tot td { padding:6px 4px; border:0; }
   .tot tr.grand td { border-top:1px solid var(--line); font-size:22px; font-weight:700; padding-top:12px; color:#fff; }
   .words { font-size:12px; color:var(--muted); margin-top:8px; }
+  #rate_sum { margin-top:14px; padding-top:10px; border-top:1px solid var(--line); }
+  #rate_sum .rs-title { font-size:12px; color:var(--muted); margin-bottom:4px; }
+  table.rs th { font-size:11px; text-align:right; } table.rs th:first-child { text-align:left; }
+  table.rs td { font-size:12.5px; }
   .warn { color:var(--bad); font-size:12px; }
   .good { color:var(--ok); font-size:12px; }
   .actions { display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap; margin-top:14px; }
@@ -136,6 +140,10 @@
       <tr class="grand"><td>Total</td><td class="num" id="t_total">0.00</td></tr>
     </table>
     <div class="words" id="t_words"></div>
+    <div id="rate_sum" hidden>
+      <div class="rs-title">Tax summary by GST rate</div>
+      <table class="tot rs"><thead><tr id="rs_head"></tr></thead><tbody id="rs_body"></tbody></table>
+    </div>
     <div id="calc_status" class="warn"></div>
   </section>
 </div>
@@ -478,6 +486,16 @@
       if (seq === calcSeq) $('calc_status').textContent = 'Cannot reach the server.';
     }
   }
+  function renderRateSummary(j) {
+    const rows = j.summary || [], box = $('rate_sum');
+    box.hidden = rows.length < 2;  // one rate only: the totals above already say it all
+    if (box.hidden) return;
+    const cols = j.intra ? ['cgst', 'sgst'] : ['igst'];
+    const th = t => '<th>' + t + '</th>';
+    $('rs_head').innerHTML = th('Rate') + th('Taxable') + cols.map(c => th(c.toUpperCase())).join('') + th('GST');
+    $('rs_body').innerHTML = rows.map(r => '<tr><td>' + Number(r.rate) + '%</td><td class="num">' + fmt(r.taxable) + '</td>' +
+      cols.map(c => '<td class="num">' + fmt(r[c]) + '</td>').join('') + '<td class="num">' + fmt(r.gst) + '</td></tr>').join('');
+  }
   function render(j) {
     allRows().forEach((tr, i) => {
       const l = j.lines[i]; if (!l) return;
@@ -493,6 +511,7 @@
     $('t_round').textContent = (Number(j.round_off) > 0 ? '+' : '') + fmt(j.round_off);
     $('t_total').textContent = fmt(j.total);
     $('t_words').textContent = Number(j.total) > 0 ? j.words : '';
+    renderRateSummary(j);
     $('row_cgst').hidden = $('row_sgst').hidden = !j.intra;
     $('row_igst').hidden = j.intra;
     $('gst_type').textContent = j.intra ? 'Same state: CGST + SGST applies' : 'Different state: IGST applies';

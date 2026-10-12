@@ -2,7 +2,9 @@
 import unittest
 from decimal import Decimal as Dc
 
-from billing.calc import D, amount_in_words, compute_invoice, compute_line, compute_line_from_amount, is_valid_gstin
+from billing.calc import (
+    D, amount_in_words, compute_invoice, compute_line, compute_line_from_amount, is_valid_gstin, rate_summary, split_gst,
+)
 
 
 class LineTests(unittest.TestCase):
@@ -153,6 +155,56 @@ class HelperTests(unittest.TestCase):
         self.assertFalse(is_valid_gstin("27AAPFU0939F1ZA"))  # wrong check digit
         self.assertFalse(is_valid_gstin("27AAPFU0939F1Z"))  # too short
         self.assertFalse(is_valid_gstin(""))
+
+
+class RateSummaryTests(unittest.TestCase):
+    ITEMS = [
+        {"qty": "1", "rate": "1000", "gst_rate": "18"},
+        {"qty": "1", "rate": "500", "gst_rate": "12"},
+        {"qty": "3", "rate": "33.33", "gst_rate": "18"},
+        {},  # blank line
+    ]
+
+    def test_groups_by_rate_and_matches_the_invoice_totals(self):
+        for intra in (True, False):
+            for inclusive in (False, True):
+                r = compute_invoice(self.ITEMS, inclusive, intra)
+                s = r["summary"]
+                self.assertEqual([x["rate"] for x in s], [Dc("12"), Dc("18")])
+                for k in ("taxable", "cgst", "sgst", "igst"):
+                    self.assertEqual(sum(x[k] for x in s), r[k], (k, intra, inclusive))
+                self.assertEqual(sum(x["gst"] for x in s), r["gst_total"])
+                for x in s:
+                    self.assertEqual(x["cgst"] + x["sgst"] + x["igst"], x["gst"])
+
+    def test_example_from_the_docs(self):
+        s = compute_invoice(self.ITEMS[:2], False, True)["summary"]
+        self.assertEqual((s[0]["taxable"], s[0]["cgst"], s[0]["sgst"]), (Dc("500.00"), Dc("30.00"), Dc("30.00")))
+        self.assertEqual((s[1]["taxable"], s[1]["cgst"], s[1]["sgst"]), (Dc("1000.00"), Dc("90.00"), Dc("90.00")))
+
+    def test_inter_state_uses_igst_only(self):
+        s = compute_invoice(self.ITEMS[:2], False, False)["summary"]
+        self.assertEqual([(x["cgst"], x["sgst"], x["igst"]) for x in s], [(0, 0, Dc("60.00")), (0, 0, Dc("180.00"))])
+
+    def test_same_rate_written_differently_is_one_group(self):
+        r = compute_invoice([{"qty": "1", "rate": "100", "gst_rate": "18"}, {"qty": "1", "rate": "100", "gst_rate": "18.0"}], False, True)
+        self.assertEqual(len(r["summary"]), 1)
+
+    def test_odd_paise_split_never_loses_a_paisa(self):
+        self.assertEqual(split_gst(Dc("0.05"), True), (Dc("0.03"), Dc("0.02"), Dc("0.00")))  # 0.025 rounds up for CGST
+        c, sg, i = split_gst(Dc("0.03"), True)
+        self.assertEqual(c + sg, Dc("0.03"))
+
+    def test_summary_rebuilt_from_stored_lines_equals_the_live_one(self):
+        r = compute_invoice(self.ITEMS, False, True)
+        stored = []
+        for it, line in zip(self.ITEMS, r["lines"]):
+            c, sg, i = split_gst(line["gst"], True)
+            stored.append((it.get("gst_rate"), {"taxable": line["taxable"], "gst": line["gst"], "cgst": c, "sgst": sg, "igst": i}))
+        self.assertEqual(rate_summary(stored), r["summary"])
+
+    def test_all_blank_gives_empty_summary(self):
+        self.assertEqual(compute_invoice([{}, {}], False, True)["summary"], [])
 
 
 if __name__ == "__main__":

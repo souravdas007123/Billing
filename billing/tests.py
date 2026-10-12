@@ -292,6 +292,26 @@ class BillingViewTests(TestCase):
         self.assertEqual(self.client.get(reverse("dashboard_export")).status_code, 302)
 
 
+    def test_print_page_shows_rate_wise_tax_summary_only_for_mixed_rates(self):
+        mixed = payload(items=[
+            {"description": "A", "qty": "1", "rate": "1000", "gst_rate": "18"},
+            {"description": "B", "qty": "1", "rate": "500", "gst_rate": "12"},
+        ])
+        inv_id = self.save(mixed).json()["id"]
+        r = self.client.get(reverse("invoice_print", args=[inv_id]))
+        rows = r.context["summary"]
+        self.assertEqual([(x["taxable"], x["cgst"], x["sgst"]) for x in rows], [(500, 30, 30), (1000, 90, 90)])
+        self.assertContains(r, "Total GST")
+        single = self.save(payload(invoice_no="T-2")).json()["id"]
+        self.assertNotContains(self.client.get(reverse("invoice_print", args=[single])), "Total GST")
+
+    def test_live_calc_returns_the_summary(self):
+        body = {"price_mode": "EXCL", "place_of_supply": "West Bengal",
+                "items": [{"qty": "1", "rate": "1000", "gst_rate": "18"}, {"qty": "1", "rate": "500", "gst_rate": "12"}]}
+        data = self.client.post(reverse("calc_api"), json.dumps(body), content_type="application/json").json()
+        self.assertEqual([(x["rate"], x["cgst"], x["sgst"]) for x in data["summary"]], [("12", "30.00", "30.00"), ("18", "90.00", "90.00")])
+
+
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):
         self.assertEqual(Invoice.next_number("INV", datetime.date(2026, 10, 12)), "INV/26-27/0001")

@@ -51,6 +51,9 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
   value and GST (CGST / SGST / IGST) month by month, a monthly chart, the top parties, a GST rate-wise table, same-state
   vs other-state sales, and how many bills are still not submitted. Only submitted bills are counted, by invoice date.
   **Download CSV** gives the monthly table for Excel / your CA.
+- **Mixed GST rates**: each line is calculated with its own rate and the invoice totals are the sum of the lines. When a bill
+  has more than one rate, a *Tax summary by GST rate* (taxable value, CGST / SGST or IGST, GST per rate) is shown under the
+  totals on the billing screen and on the printed invoice. Its columns always add up to the invoice totals.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

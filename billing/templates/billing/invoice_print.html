@@ -21,6 +21,8 @@
   .sum td { border:1px solid #444; }
   .sum tr.g td { font-weight:700; font-size:14px; }
   .pre { white-space:pre-line; }
+  .taxsum { margin-top:10px; }
+  .taxsum th, .taxsum td { font-size:11.5px; }
   .foot { display:grid; grid-template-columns:1.4fr 1fr; gap:14px; margin-top:12px; }
   .sign { text-align:right; margin-top:40px; }
   @media print {
@@ -117,6 +119,19 @@
     <tr><td>Round-off</td><td class="r">{{ invoice.round_off|floatformat:2 }}</td></tr>
     <tr class="g"><td>Total</td><td class="r">&#8377; {{ invoice.total|floatformat:2 }}</td></tr>
   </table>
+
+  {% if summary|length > 1 %}
+  <table class="taxsum">
+    <thead><tr><th>GST rate</th><th>Taxable value</th>{% if invoice.is_intra_state %}<th>CGST</th><th>SGST</th>{% else %}<th>IGST</th>{% endif %}<th>Total GST</th></tr></thead>
+    <tbody>
+    {% for r in summary %}
+      <tr><td class="c">{{ r.rate|floatformat:"-2" }}%</td><td class="r">{{ r.taxable|floatformat:2 }}</td>
+        {% if invoice.is_intra_state %}<td class="r">{{ r.cgst|floatformat:2 }}</td><td class="r">{{ r.sgst|floatformat:2 }}</td>{% else %}<td class="r">{{ r.igst|floatformat:2 }}</td>{% endif %}
+        <td class="r">{{ r.gst|floatformat:2 }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
 
   <p style="margin:10px 0 0"><b>Amount in words:</b> {{ words }}</p>
 

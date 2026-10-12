@@ -46,13 +46,7 @@ def compute_line(qty, rate, discount_pct, gst_rate, inclusive, intra):
         taxable = q2(net)
         gst = q2(taxable * gst_rate / HUNDRED)
         total = taxable + gst
-    if intra:
-        cgst = q2(gst / 2)
-        sgst = gst - cgst
-        igst = Decimal("0.00")
-    else:
-        cgst = sgst = Decimal("0.00")
-        igst = gst
+    cgst, sgst, igst = split_gst(gst, intra)
     return {
         "taxable": taxable,
         "gst": gst,
@@ -61,6 +55,31 @@ def compute_line(qty, rate, discount_pct, gst_rate, inclusive, intra):
         "igst": igst,
         "total": total,
     }
+
+
+def split_gst(gst, intra):
+    """One line's GST as (CGST, SGST, IGST). Same state: CGST is half rounded, SGST the rest, so they always add up to GST."""
+    if intra:
+        cgst = q2(gst / 2)
+        return cgst, gst - cgst, Decimal("0.00")
+    return Decimal("0.00"), Decimal("0.00"), gst
+
+
+def rate_summary(entries):
+    """Tax summary by GST rate. entries: (gst_rate, line) pairs, where line has taxable, gst, cgst, sgst, igst.
+
+    Built from the per-line figures, so every column adds up to the invoice totals. Empty lines are skipped.
+    """
+    rates = {}
+    for rate, line in entries:
+        if not (line["taxable"] or line["gst"]):
+            continue
+        r = rates.setdefault(
+            D(rate).normalize(), {k: Decimal("0.00") for k in ("taxable", "gst", "cgst", "sgst", "igst")}
+        )
+        for k in r:
+            r[k] += line[k]
+    return [{"rate": rate, **vals} for rate, vals in sorted(rates.items())]
 
 
 FOUR = Decimal("0.0001")
@@ -97,6 +116,7 @@ def compute_invoice(items, inclusive, intra, amount_mode=False):
             for it in items
         ]
     zero = Decimal("0.00")
+    summary = rate_summary((it.get("gst_rate"), line) for it, line in zip(items, lines))
     taxable = sum((l["taxable"] for l in lines), zero)
     cgst = sum((l["cgst"] for l in lines), zero)
     sgst = sum((l["sgst"] for l in lines), zero)
@@ -106,6 +126,7 @@ def compute_invoice(items, inclusive, intra, amount_mode=False):
     total = exact_total.quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     return {
         "lines": lines,
+        "summary": summary,
         "taxable": taxable,
         "cgst": cgst,
         "sgst": sgst,
