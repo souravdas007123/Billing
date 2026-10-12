@@ -103,6 +103,10 @@
   .msg ul { margin: 0; padding-left: 18px; }
   .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid; white-space: nowrap; }
   .badge.ok { color: var(--ok); border-color: rgba(130, 208, 166, .4); background: rgba(130, 208, 166, .08); }
+  .flash { margin-bottom: 14px; }
+  .flash-item { padding: 9px 14px; border-radius: 6px; margin-bottom: 6px; border: 1px solid var(--line); background: var(--raised); }
+  .flash-item.success { color: var(--ok); border-color: rgba(130, 208, 166, .4); background: rgba(130, 208, 166, .08); }
+  .flash-item.error { color: var(--bad); border-color: var(--bad-line); background: var(--bad-bg); }
   .badge.kind { color: var(--muted); border-color: var(--line); background: transparent; margin-left: 6px; font-weight: 500; }
   .badge.wait { color: var(--wait); border-color: rgba(232, 195, 106, .45); background: rgba(232, 195, 106, .08); }
 
@@ -150,6 +154,8 @@
 </div></header>
 {% endwith %}
 {% endif %}
-<main>{% block content %}{% endblock %}</main>
+<main>
+{% if messages %}<div class="flash">{% for m in messages %}<div class="flash-item {{ m.tags }}" role="status">{{ m }}</div>{% endfor %}</div>{% endif %}
+{% block content %}{% endblock %}</main>
 </body>
 </html>

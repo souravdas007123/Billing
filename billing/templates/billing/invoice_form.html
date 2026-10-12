@@ -47,6 +47,15 @@
       <select id="doc_type"></select>
       <span class="hint" id="doc_hint" style="display:block"></span>
     </label>
+    <div id="notice" class="msg" hidden style="margin:0 0 10px"></div>
+    <div id="cn_box" hidden>
+      <label>Against invoice no.
+        <input id="ref_no" maxlength="40" autocomplete="off">
+      </label>
+      <label>Invoice date
+        <input id="ref_date" type="date">
+      </label>
+    </div>
     <label>Invoice number
       <input id="invoice_no" maxlength="40" autocomplete="off">
       <span class="hint" style="display:block">Given automatically when the bill is submitted. You can change it.</span>
@@ -476,6 +485,8 @@
       date: $('date').value,
       price_mode: $('price_mode').value,
       doc_type: $('doc_type').value,
+      ref_no: $('ref_no').value,
+      ref_date: $('ref_date').value,
       party_name: $('party_name').value,
       party_address: $('party_address').value,
       party_gstin: $('party_gstin').value,
@@ -542,7 +553,7 @@
 
   // ---------- invoice number: last invoice and a live duplicate check ----------
   const docType = () => $('doc_type').value;
-  const isTax = () => docType() === 'TAX';
+  const isTax = () => docType() === 'TAX' || docType() === 'CN';
   function showLastInvoice() {
     const last = (INIT.last_invoices || {})[docType()];
     $('last_invoice').textContent = last ? 'Last in this series: ' + last.no + ' (' + last.date + ', ' + last.party + ')' : 'No bill of this type has been created yet.';
@@ -566,12 +577,14 @@
   const DOC_HINTS = {
     TAX: '',
     SUPPLY: 'No GST is charged. The bill is printed as a Bill of Supply and has its own number series.',
+    CN: 'Reduces the original invoice (returns, discount, correction). Enter the original invoice number and date. It has its own number series and is deducted on the dashboard.',
     EST: 'No GST. This is not a tax document: it is not part of the invoice series or the GST figures on the dashboard.',
   };
   INIT.doc_types.forEach(t => $('doc_type').add(new Option(t.label, t.value)));
   function applyDocType(initial) {
     const tax = isTax();
     document.body.classList.toggle('no-gst', !tax);
+    $('cn_box').hidden = docType() !== 'CN';
     $('doc_hint').textContent = DOC_HINTS[docType()] || '';
     $('doc_hint').className = 'hint';
     allRows().forEach(tr => {
@@ -655,6 +668,9 @@
   $('date').value = inv.date;
   $('price_mode').value = inv.price_mode;
   $('doc_type').value = inv.doc_type || 'TAX';
+  $('ref_no').value = inv.ref_no || '';
+  $('ref_date').value = inv.ref_date || '';
+  if (inv.notice) { $('notice').textContent = inv.notice; $('notice').hidden = false; }
   applyMode();
   $('party_name').value = inv.party_name;
   $('party_address').value = inv.party_address;

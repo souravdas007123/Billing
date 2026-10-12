@@ -31,8 +31,10 @@ DOC_TYPES = [
     ("TAX", "Tax invoice"),
     ("SUPPLY", "Bill of supply (no GST)"),
     ("EST", "Estimate (no GST, not a tax document)"),
+    ("CN", "Credit note (return or correction)"),
 ]
-DOC_PREFIXES = {"SUPPLY": "BOS", "EST": "EST"}  # a tax invoice uses the firm's own prefix
+DOC_PREFIXES = {"SUPPLY": "BOS", "EST": "EST", "CN": "CN"}  # a tax invoice uses the firm's own prefix
+GST_DOC_TYPES = ("TAX", "CN")  # the types that charge GST (a credit note reduces the GST of an earlier invoice)
 
 
 def doc_prefix(firm, doc_type):
@@ -129,6 +131,13 @@ class Invoice(models.Model):
     place_of_supply = models.CharField(max_length=60, blank=True)
     doc_type = models.CharField(max_length=6, choices=DOC_TYPES, default="TAX")
     price_mode = models.CharField(max_length=4, choices=PRICE_MODES, default="EXCL")
+    # A credit note names the invoice it corrects.
+    ref_no = models.CharField("Against invoice no.", max_length=40, blank=True)
+    ref_date = models.DateField("Against invoice date", null=True, blank=True)
+    # A numbered bill is never deleted: a wrong one is cancelled, and its number stays in the series.
+    status = models.CharField(max_length=10, choices=[("ACTIVE", "Active"), ("CANCELLED", "Cancelled")], default="ACTIVE")
+    cancelled_on = models.DateField(null=True, blank=True)
+    cancel_reason = models.CharField(max_length=200, blank=True)
     is_intra_state = models.BooleanField(default=True)
 
     taxable_value = models.DecimalField(max_digits=14, decimal_places=2, default=0)
@@ -146,9 +155,18 @@ class Invoice(models.Model):
 
     class Meta:
         ordering = ["-date", "-id"]
+        permissions = [("cancel_invoice", "Can cancel invoices")]
 
     def __str__(self):
         return f"{self.invoice_no or 'Draft'} - {self.party_name}"
+
+    @property
+    def is_cancelled(self):
+        return self.status == "CANCELLED"
+
+    @property
+    def charges_gst(self):
+        return self.doc_type in GST_DOC_TYPES
 
     @property
     def is_pending(self):

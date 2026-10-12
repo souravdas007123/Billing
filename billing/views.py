@@ -7,9 +7,10 @@ from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError, transaction
-from django.db.models import Q
-from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.contrib import messages
+from django.db.models import F, Q
+from django.http import HttpResponse, HttpResponseForbidden, HttpResponseRedirect, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -17,7 +18,7 @@ from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
 from .reports import build_report, fy_label, fy_start_year
-from .models import DOC_TYPES, STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product, doc_prefix
+from .models import DOC_TYPES, GST_DOC_TYPES, STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product, doc_prefix
 
 MAX_ROWS = 500
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -85,7 +86,7 @@ def calc_api(request):
     if not isinstance(items, list) or len(items) > MAX_ROWS:
         return _err(["The items are not valid."])
     items = [i if isinstance(i, dict) else {} for i in items]
-    if _doc_type(data.get("doc_type")) != "TAX":  # no GST is charged on a bill of supply or an estimate
+    if _doc_type(data.get("doc_type")) not in GST_DOC_TYPES:  # no GST is charged on a bill of supply or an estimate
         items = [{**i, "gst_rate": "0"} for i in items]
     firm = Firm.get()
     try:
@@ -136,6 +137,15 @@ def _clean_payload(data, firm):
     price_mode = _price_mode(data.get("price_mode"))
     amount_mode = price_mode == "AMT"
     doc_type = _doc_type(data.get("doc_type"))
+    ref_no, ref_date = "", None
+    if doc_type == "CN":  # a credit note must say which invoice it corrects
+        ref_no = (data.get("ref_no") or "").strip()
+        if not ref_no or len(ref_no) > 40:
+            errors.append("Enter the number of the invoice this credit note is against (up to 40 characters).")
+        try:
+            ref_date = datetime.date.fromisoformat((data.get("ref_date") or "").strip())
+        except ValueError:
+            errors.append("Enter the date of the invoice this credit note is against.")
 
     allowed_rates = set(settings.GST_RATES)
     rows = data.get("items")
@@ -157,7 +167,7 @@ def _clean_payload(data, firm):
         qty = Decimal(1) if (amount_mode and qty_text == "") else D(qty_text)
         rate, amount = D(rate_text), D(amount_text)
         disc = Decimal(0) if amount_mode else D(r.get("discount_pct"))
-        gst = D(r.get("gst_rate")) if doc_type == "TAX" else Decimal(0)  # only a tax invoice charges GST
+        gst = D(r.get("gst_rate")) if doc_type in GST_DOC_TYPES else Decimal(0)  # only a tax invoice or credit note charges GST
         hsn, unit = str(r.get("hsn") or "").strip(), str(r.get("unit") or "").strip()
 
         if not desc:
@@ -225,6 +235,8 @@ def _clean_payload(data, firm):
         "place_of_supply": place,
         "price_mode": price_mode,
         "doc_type": doc_type,
+        "ref_no": ref_no,
+        "ref_date": ref_date,
         "notes": (data.get("notes") or "").strip(),
         "items": items,
         "result": result,
@@ -255,6 +267,8 @@ def invoice_save(request, pk=None):
         return _err(errors)
 
     invoice = get_object_or_404(Invoice, pk=pk) if pk else None
+    if invoice is not None and invoice.is_cancelled:
+        return _err(["A cancelled bill cannot be edited."])
     was_issued = invoice is not None and invoice.invoice_no is not None
     if was_issued and not c["submitted"]:
         return _err(["This bill has already been submitted and its invoice number is in use, so it cannot go back to \"not submitted\"."])
@@ -297,6 +311,7 @@ def invoice_save(request, pk=None):
                 inv.place_of_supply = c["place_of_supply"]
                 inv.price_mode = c["price_mode"]
                 inv.doc_type = c["doc_type"]
+                inv.ref_no, inv.ref_date = c["ref_no"], c["ref_date"]
                 inv.is_intra_state = r["intra"]
                 inv.taxable_value = r["taxable"]
                 inv.cgst, inv.sgst, inv.igst = r["cgst"], r["sgst"], r["igst"]
@@ -360,10 +375,54 @@ def check_number(request):
 
 
 # ---------------- pages ----------------
+def _form_items(invoice):
+    return [
+        {"description": i.description, "hsn": i.hsn, "qty": _plain(i.qty), "unit": i.unit,
+         "rate": _plain(i.rate), "amount": _plain(i.line_total),
+         "discount_pct": _plain(i.discount_pct), "gst_rate": _plain(i.gst_rate)}
+        for i in invoice.items.all()
+    ]
+
+
+def _party_fields(invoice):
+    return {
+        "party_name": invoice.party_name, "party_address": invoice.party_address, "party_gstin": invoice.party_gstin,
+        "party_state": invoice.party_state, "party_phone": invoice.party_phone, "party_email": invoice.party_email,
+        "place_of_supply": invoice.place_of_supply,
+    }
+
+
+def _prefill(source, target_type, firm, today):
+    """Form data for a NEW bill that starts as a copy of an existing one: a repeat bill, an estimate turned into a tax
+    invoice, or a credit note against an invoice. Nothing is saved until the person presses Save."""
+    items, price_mode, notice = _form_items(source), source.price_mode, ""
+    if target_type in GST_DOC_TYPES and source.doc_type not in GST_DOC_TYPES:
+        # an estimate or bill of supply has no GST: the same prices become GST-excluded rates and GST is added on top
+        price_mode = "EXCL"
+        for it in items:
+            it["gst_rate"] = _plain(settings.DEFAULT_GST_RATE)
+        notice = "GST has been added on top of the prices. Check the GST rate of every line before saving."
+    elif target_type == "CN":
+        notice = f"Credit note against {source.invoice_no or 'this bill'}. Keep only the items and quantities being returned or corrected."
+    return {
+        "invoice_no": Invoice.next_number(doc_prefix(firm, target_type), today),
+        "date": today.isoformat(), "price_mode": price_mode, "doc_type": target_type,
+        **_party_fields(source),
+        "ref_no": (source.invoice_no or "") if target_type == "CN" else "",
+        "ref_date": source.date.isoformat() if target_type == "CN" else "",
+        "notes": source.notes if target_type != "CN" else "", "notice": notice,
+        "pending": False, "issued": False, "items": items,
+    }
+
+
 @login_required
 def invoice_form(request, pk=None):
     firm = Firm.get()
     invoice = get_object_or_404(Invoice.objects.prefetch_related("items"), pk=pk) if pk else None
+    if invoice is not None and invoice.is_cancelled:
+        messages.error(request, "A cancelled bill cannot be edited.")
+        return redirect("invoice_print", pk=invoice.pk)
+    today = timezone.localdate()
 
     if invoice:
         inv = {
@@ -371,32 +430,28 @@ def invoice_form(request, pk=None):
             "date": invoice.date.isoformat(),
             "price_mode": invoice.price_mode,
             "doc_type": invoice.doc_type,
-            "party_name": invoice.party_name,
-            "party_address": invoice.party_address,
-            "party_gstin": invoice.party_gstin,
-            "party_state": invoice.party_state,
-            "party_phone": invoice.party_phone,
-            "party_email": invoice.party_email,
-            "place_of_supply": invoice.place_of_supply,
+            **_party_fields(invoice),
+            "ref_no": invoice.ref_no,
+            "ref_date": invoice.ref_date.isoformat() if invoice.ref_date else "",
             "notes": invoice.notes,
+            "notice": "",
             "pending": invoice.is_draft,
             "issued": not invoice.is_draft,
-            "items": [
-                {"description": i.description, "hsn": i.hsn, "qty": _plain(i.qty), "unit": i.unit,
-                 "rate": _plain(i.rate), "amount": _plain(i.line_total),
-                 "discount_pct": _plain(i.discount_pct), "gst_rate": _plain(i.gst_rate)}
-                for i in invoice.items.all()
-            ],
+            "items": _form_items(invoice),
         }
+    elif request.GET.get("copy", "").isdigit():
+        source = get_object_or_404(Invoice.objects.prefetch_related("items"), pk=int(request.GET["copy"]))
+        target = _doc_type(request.GET.get("as") or source.doc_type)
+        inv = _prefill(source, target, firm, today)
     else:
-        today = timezone.localdate()
         inv = {
             "invoice_no": Invoice.next_number(firm.invoice_prefix, today),
             "date": today.isoformat(),
             "price_mode": "AMT",
             "doc_type": "TAX",
             "party_name": "", "party_address": "", "party_gstin": "", "party_state": "",
-            "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "pending": False, "issued": False, "items": [],
+            "party_phone": "", "party_email": "", "place_of_supply": "", "ref_no": "", "ref_date": "", "notice": "",
+            "notes": "", "pending": False, "issued": False, "items": [],
         }
 
     init = {
@@ -428,17 +483,21 @@ def invoice_form(request, pk=None):
 def invoice_list(request):
     q = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
-    status = status if status in ("pending", "submitted") else ""
+    status = status if status in ("pending", "submitted", "cancelled") else ""
     qs = Invoice.objects.all()
     if q:
         qs = qs.filter(Q(invoice_no__icontains=q) | Q(party_name__icontains=q) | Q(party_gstin__icontains=q))
     if status == "pending":
         qs = qs.filter(submitted_on__isnull=True)
     elif status == "submitted":
-        qs = qs.filter(submitted_on__isnull=False)
+        qs = qs.filter(submitted_on__isnull=False, status="ACTIVE")
+    elif status == "cancelled":
+        qs = qs.filter(status="CANCELLED")
     pending_count = Invoice.objects.filter(submitted_on__isnull=True).count()
+    cancelled_count = Invoice.objects.filter(status="CANCELLED").count()
     total_count = Invoice.objects.count()
-    counts = {"all": total_count, "pending": pending_count, "submitted": total_count - pending_count}
+    counts = {"all": total_count, "pending": pending_count, "cancelled": cancelled_count,
+              "submitted": total_count - pending_count - cancelled_count}
     return render(
         request,
         "billing/invoice_list.html",
@@ -469,6 +528,42 @@ def invoice_submit(request, pk):
     if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
         target = reverse("invoice_list")
     return HttpResponseRedirect(target)
+
+
+@login_required
+@require_POST
+def invoice_cancel(request, pk):
+    """Cancel a numbered bill. It stays in the number series (marked CANCELLED) and is left out of the sales figures."""
+    invoice = get_object_or_404(Invoice, pk=pk)
+    if not request.user.has_perm("billing.cancel_invoice"):
+        return HttpResponseForbidden("You do not have permission to cancel invoices.")
+    reason = (request.POST.get("reason") or "").strip()
+    if invoice.invoice_no is None:
+        messages.error(request, "This bill has no number yet, so there is nothing to cancel. Delete the draft instead.")
+    elif invoice.is_cancelled:
+        messages.info(request, "This bill is already cancelled.")
+    elif not reason:
+        messages.error(request, "Enter the reason for cancelling the bill.")
+    else:
+        invoice.status = "CANCELLED"
+        invoice.cancelled_on = timezone.localdate()
+        invoice.cancel_reason = reason[:200]
+        invoice.save()
+        messages.success(request, f"{invoice.invoice_no} is cancelled. Its number stays in the series.")
+    return redirect("invoice_print", pk=invoice.pk)
+
+
+@login_required
+@require_POST
+def invoice_delete_draft(request, pk):
+    """Only a draft (no number) can be deleted. A numbered bill must be cancelled instead."""
+    invoice = get_object_or_404(Invoice, pk=pk)
+    if invoice.invoice_no is not None:
+        messages.error(request, "A bill with a number cannot be deleted. Cancel it instead.")
+        return redirect("invoice_print", pk=invoice.pk)
+    invoice.delete()
+    messages.success(request, "The draft has been deleted.")
+    return redirect("invoice_list")
 
 
 def _stored_summary(invoice, items):
@@ -509,9 +604,10 @@ def invoice_print(request, pk):
             "words": amount_in_words(invoice.total),
             "inclusive": invoice.price_mode == "INCL",
             "summary": _stored_summary(invoice, invoice.items.all()),
-            "is_tax": invoice.doc_type == "TAX",
-            "doc_title": {"TAX": "Tax invoice", "SUPPLY": "Bill of supply", "EST": "Estimate"}[invoice.doc_type],
-            "number_label": {"TAX": "Invoice no.", "SUPPLY": "Bill no.", "EST": "Estimate no."}[invoice.doc_type],
+            "is_tax": invoice.charges_gst,
+            "doc_title": {"TAX": "Tax invoice", "SUPPLY": "Bill of supply", "EST": "Estimate", "CN": "Credit note"}[invoice.doc_type],
+            "number_label": {"TAX": "Invoice no.", "SUPPLY": "Bill no.", "EST": "Estimate no.", "CN": "Credit note no."}[invoice.doc_type],
+            "can_cancel": request.user.has_perm("billing.cancel_invoice"),
         },
     )
 
@@ -526,10 +622,12 @@ def _report_for_year(request):
     except ValueError:
         start = fy_start_year(today)
     begin, end = datetime.date(start, 4, 1), datetime.date(start + 1, 3, 31)
-    issued = Invoice.objects.filter(invoice_no__isnull=False, date__gte=begin, date__lte=end).exclude(doc_type="EST")  # estimates are not sales
+    issued = Invoice.objects.filter(
+        invoice_no__isnull=False, date__gte=begin, date__lte=end, status="ACTIVE"
+    ).exclude(doc_type="EST")  # estimates are not sales, cancelled bills are not counted
     invoices = list(issued.values("date", "party_name", "party_gstin", "doc_type", "is_intra_state", "taxable_value", "cgst", "sgst", "igst", "round_off", "total"))
     items = list(
-        InvoiceItem.objects.filter(invoice__in=issued).values("gst_rate", "taxable", "gst_amount")
+        InvoiceItem.objects.filter(invoice__in=issued).values("gst_rate", "taxable", "gst_amount", doc_type=F("invoice__doc_type"))
     )
     return start, today, build_report(invoices, items, start, today)
 

@@ -30,13 +30,14 @@ def _empty_month(year, month):
 def build_report(invoices, items, start_year, today=None):
     """
     invoices: iterable of dicts (date, party_name, party_gstin, doc_type, is_intra_state, taxable_value, cgst, sgst, igst, round_off, total) of SUBMITTED bills.
-    items:    iterable of dicts (gst_rate, taxable, gst_amount) of the lines of those bills.
+    items:    iterable of dicts (gst_rate, taxable, gst_amount, optional doc_type) of the lines of those bills.
     Bills are counted in the month of their invoice date. Drafts are not part of any figure here.
     """
     today = today or datetime.date.today()
     months = [_empty_month(y, m) for y, m in fy_months(start_year)]
     index = {(m["year"], m["month"]): m for m in months}
     parties = {}
+    credit = {"bills": 0, "taxable": ZERO, "total": ZERO}  # credit notes (already deducted from every figure)
     intra = {"bills": 0, "taxable": ZERO, "total": ZERO}
     inter = {"bills": 0, "taxable": ZERO, "total": ZERO}
     registered = {"bills": 0, "taxable": ZERO, "total": ZERO}    # party has a GSTIN (B2B)
@@ -46,26 +47,29 @@ def build_report(invoices, items, start_year, today=None):
         row = index.get((inv["date"].year, inv["date"].month))
         if row is None:
             continue
-        row["bills"] += 1
-        row["taxable"] += inv["taxable_value"]
-        row["cgst"] += inv["cgst"]
-        row["sgst"] += inv["sgst"]
-        row["igst"] += inv["igst"]
-        row["round_off"] += inv["round_off"]
-        row["total"] += inv["total"]
-        gst = inv["cgst"] + inv["sgst"] + inv["igst"]
+        sign = -1 if inv.get("doc_type") == "CN" else 1  # a credit note takes away from the sales
+        if sign == 1:
+            row["bills"] += 1
+        for k_row, k_inv in (("taxable", "taxable_value"), ("cgst", "cgst"), ("sgst", "sgst"), ("igst", "igst"),
+                             ("round_off", "round_off"), ("total", "total")):
+            row[k_row] += sign * inv[k_inv]
+        gst = sign * (inv["cgst"] + inv["sgst"] + inv["igst"])
         row["gst"] += gst
         key = (inv["party_name"] or "").strip().lower()
         p = parties.setdefault(key, {"name": (inv["party_name"] or "").strip(), "bills": 0, "total": ZERO})
-        p["bills"] += 1
-        p["total"] += inv["total"]
+        p["bills"] += 1 if sign == 1 else 0
+        p["total"] += sign * inv["total"]
         buckets = [intra if inv["is_intra_state"] else inter, registered if (inv.get("party_gstin") or "").strip() else unregistered]
         if inv.get("doc_type", "TAX") in by_type:
             buckets.append(by_type[inv.get("doc_type", "TAX")])
+        if sign == -1:
+            credit["bills"] += 1
+            credit["taxable"] += inv["taxable_value"]
+            credit["total"] += inv["total"]
         for bucket in buckets:
-            bucket["bills"] += 1
-            bucket["taxable"] += inv["taxable_value"]
-            bucket["total"] += inv["total"]
+            bucket["bills"] += 1 if sign == 1 else 0
+            bucket["taxable"] += sign * inv["taxable_value"]
+            bucket["total"] += sign * inv["total"]
 
     totals = _empty_month(start_year, 4)
     totals["label"] = "Total"
@@ -79,9 +83,10 @@ def build_report(invoices, items, start_year, today=None):
 
     rates = {}
     for it in items:
+        sign = -1 if it.get("doc_type") == "CN" else 1
         r = rates.setdefault(it["gst_rate"], {"rate": it["gst_rate"], "taxable": ZERO, "gst": ZERO})
-        r["taxable"] += it["taxable"]
-        r["gst"] += it["gst_amount"]
+        r["taxable"] += sign * it["taxable"]
+        r["gst"] += sign * it["gst_amount"]
     rate_rows = sorted(rates.values(), key=lambda r: r["rate"])
 
     top = sorted(parties.values(), key=lambda p: p["total"], reverse=True)[:5]
@@ -91,7 +96,7 @@ def build_report(invoices, items, start_year, today=None):
     best = max(months, key=lambda m: m["total"]) if grand else None
     return {
         "months": months, "totals": totals, "parties": top, "rates": rate_rows, "intra": intra, "inter": inter,
-        "registered": registered, "unregistered": unregistered, "by_type": by_type,
+        "registered": registered, "unregistered": unregistered, "by_type": by_type, "credit": credit,
         "average_bill": (grand / totals["bills"]).quantize(Decimal("0.01")) if totals["bills"] else ZERO,
         "best_month": best["label"] if best else "",
     }

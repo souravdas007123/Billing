@@ -65,6 +65,16 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
   Each type has its own number series, so the tax invoice series never has gaps. The type can be changed while a bill is
   a draft; once it has a number it is fixed. For a composition dealer, add the legally required wording (for example
   "Composition taxable person, not eligible to collect tax on supplies") to the Terms in Admin -> Firm.
+- **Cancel a bill**: open the bill and press *Cancel invoice*, then give a reason. Only users with the
+  `billing.cancel_invoice` permission (superusers have it; give it to others in Admin -> Users) can do this. A cancelled
+  bill keeps its number (so the series has no hole), is stamped CANCELLED when printed, and is left out of the dashboard.
+  A numbered bill can never be deleted (not even in the admin site); only a draft can be deleted.
+- **Credit note** (document type *Credit note*): used when goods are returned or the price/tax of an earlier invoice must be
+  reduced. Enter the original invoice number and date. It has its own series (`CN/26-27/0001`) and is **deducted** from the
+  dashboard sales and GST. Use the *Credit note* button on the print page of an invoice to start one with the items filled in.
+- The **Copy** button repeats a bill for the same party with today's date and a fresh number. the **Make tax invoice** button on an
+  estimate (or bill of supply) copies it into a new Tax invoice; GST is added on top of the prices, so check the GST rate of
+  each line before saving.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

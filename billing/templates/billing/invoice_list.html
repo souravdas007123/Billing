@@ -36,6 +36,7 @@
   <a href="?{% if q %}q={{ q|urlencode }}{% endif %}"{% if not status %} class="active"{% endif %}>All<span class="n">{{ counts.all }}</span></a>
   <a href="?status=pending{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'pending' %} class="active"{% endif %}>Not submitted<span class="n">{{ counts.pending }}</span></a>
   <a href="?status=submitted{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'submitted' %} class="active"{% endif %}>Submitted<span class="n">{{ counts.submitted }}</span></a>
+  <a href="?status=cancelled{% if q %}&amp;q={{ q|urlencode }}{% endif %}"{% if status == 'cancelled' %} class="active"{% endif %}>Cancelled<span class="n">{{ counts.cancelled }}</span></a>
 </div>
 <div class="card" style="padding:0;overflow:hidden">
   <table class="list-table">
@@ -43,13 +44,13 @@
     <tbody>
     {% for inv in invoices %}
       <tr>
-        <td>{% if inv.invoice_no %}<a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a>{% else %}<a href="{% url 'invoice_print' inv.pk %}" class="muted">No number yet</a>{% endif %}{% if inv.doc_type != 'TAX' %} <span class="badge kind">{% if inv.doc_type == 'SUPPLY' %}Bill of supply{% else %}Estimate{% endif %}</span>{% endif %}</td>
+        <td>{% if inv.invoice_no %}<a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a>{% else %}<a href="{% url 'invoice_print' inv.pk %}" class="muted">No number yet</a>{% endif %}{% if inv.doc_type != 'TAX' %} <span class="badge kind">{% if inv.doc_type == 'SUPPLY' %}Bill of supply{% elif inv.doc_type == 'CN' %}Credit note{% else %}Estimate{% endif %}</span>{% endif %}</td>
         <td>{{ inv.date|date:"d-m-Y" }}</td>
         <td>{{ inv.party_name }}</td>
         <td class="num">{{ inv.taxable_value|floatformat:2 }}</td>
         <td class="num">{{ inv.gst_total|floatformat:2 }}</td>
         <td class="num"><b>{{ inv.total|floatformat:2 }}</b></td>
-        <td>{% if inv.submitted_on %}<span class="badge ok">Submitted {{ inv.submitted_on|date:"d-m-Y" }}</span>{% else %}<span class="badge wait">Not submitted</span>{% endif %}</td>
+        <td>{% if inv.is_cancelled %}<span class="badge" style="color:var(--bad);border-color:var(--bad-line)">Cancelled</span>{% elif inv.submitted_on %}<span class="badge ok">Submitted {{ inv.submitted_on|date:"d-m-Y" }}</span>{% else %}<span class="badge wait">Not submitted</span>{% endif %}</td>
         <td class="actions">
           <a href="{% url 'invoice_print' inv.pk %}">Print</a> &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a>
           {% if not inv.submitted_on %}&middot;
@@ -57,7 +58,7 @@
         </td>
       </tr>
     {% empty %}
-      <tr><td colspan="8" class="empty">{% if q %}No invoices match your search.{% elif status == 'pending' %}Every bill has been submitted.{% elif status == 'submitted' %}No bill has been submitted yet.{% else %}No invoices yet. Create your first one with &ldquo;New invoice&rdquo;.{% endif %}</td></tr>
+      <tr><td colspan="8" class="empty">{% if q %}No invoices match your search.{% elif status == 'pending' %}Every bill has been submitted.{% elif status == 'submitted' %}No bill has been submitted yet.{% elif status == 'cancelled' %}No bill has been cancelled.{% else %}No invoices yet. Create your first one with &ldquo;New invoice&rdquo;.{% endif %}</td></tr>
     {% endfor %}
     </tbody>
   </table>

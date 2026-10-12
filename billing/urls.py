@@ -13,5 +13,7 @@ urlpatterns = [
     path("calc/", views.calc_api, name="calc_api"),
     path("check-number/", views.check_number, name="check_number"),
     path("<int:pk>/submit/", views.invoice_submit, name="invoice_submit"),
+    path("<int:pk>/cancel/", views.invoice_cancel, name="invoice_cancel"),
+    path("<int:pk>/delete-draft/", views.invoice_delete_draft, name="invoice_delete_draft"),
     path("<int:pk>/print/", views.invoice_print, name="invoice_print"),
 ]

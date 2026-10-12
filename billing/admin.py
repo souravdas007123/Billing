@@ -117,7 +117,9 @@ class InvoiceItemInline(admin.TabularInline):
 
 @admin.register(Invoice)
 class InvoiceAdmin(admin.ModelAdmin):
-    list_display = ("invoice_no", "date", "party_name", "total", "submitted_on")
+    list_display = ("invoice_no", "doc_type", "date", "party_name", "total", "submitted_on", "status")
+    list_filter = ("doc_type", "status")
+    actions = None  # no bulk delete
     search_fields = ("invoice_no", "party_name", "party_gstin")
     date_hierarchy = "date"
     inlines = [InvoiceItemInline]
@@ -126,3 +128,9 @@ class InvoiceAdmin(admin.ModelAdmin):
 
     def has_add_permission(self, request):
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        # A numbered bill can never be deleted (that would leave a hole in the series): cancel it on the billing screen.
+        if obj is not None and obj.invoice_no:
+            return False
+        return super().has_delete_permission(request, obj)

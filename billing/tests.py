@@ -376,6 +376,59 @@ class BillingViewTests(TestCase):
         est = self.save(payload(invoice_no="", doc_type="EST")).json()["id"]
         self.assertContains(self.client.get(reverse("invoice_print", args=[est])), "not a tax invoice")
 
+    # ---------- cancel, credit note, copy ----------
+    def issue(self, **over):
+        r = self.save(payload(invoice_no="", submitted=True, **over))
+        self.assertEqual(r.status_code, 200, r.content)
+        return Invoice.objects.get(pk=r.json()["id"])
+
+    def test_cancel_needs_permission_and_reason(self):
+        inv = self.issue()
+        url = reverse("invoice_cancel", args=[inv.pk])
+        self.assertEqual(self.client.post(url, {"reason": "wrong party"}).status_code, 403)
+        get_user_model().objects.filter(username="u").update(is_superuser=True)
+        self.client.post(url, {"reason": ""})
+        inv.refresh_from_db()
+        self.assertFalse(inv.is_cancelled)
+        self.client.post(url, {"reason": "wrong party"})
+        inv.refresh_from_db()
+        self.assertTrue(inv.is_cancelled)
+        self.assertEqual(inv.cancel_reason, "wrong party")
+        # a cancelled bill cannot be edited and its number is not reused
+        r = self.save(payload(invoice_no=inv.invoice_no), reverse("invoice_update", args=[inv.pk]))
+        self.assertEqual(r.status_code, 400)
+        self.assertNotEqual(self.issue().invoice_no, inv.invoice_no)
+
+    def test_draft_can_be_deleted_numbered_cannot(self):
+        draft = Invoice.objects.get(pk=self.save(payload(submitted=False)).json()["id"])
+        self.client.post(reverse("invoice_delete_draft", args=[draft.pk]))
+        self.assertFalse(Invoice.objects.filter(pk=draft.pk).exists())
+        inv = self.issue()
+        self.client.post(reverse("invoice_delete_draft", args=[inv.pk]))
+        self.assertTrue(Invoice.objects.filter(pk=inv.pk).exists())
+
+    def test_credit_note_needs_reference_and_has_own_series(self):
+        inv = self.issue()
+        self.assertEqual(self.save(payload(invoice_no="", doc_type="CN")).status_code, 400)
+        cn = self.issue(doc_type="CN", ref_no=inv.invoice_no, ref_date="2026-10-12")
+        self.assertTrue(cn.invoice_no.startswith("CN/"))
+        self.assertEqual(cn.ref_no, inv.invoice_no)
+        self.assertEqual(self.client.get(reverse("invoice_print", args=[cn.pk])).status_code, 200)
+
+    def test_credit_note_is_deducted_on_dashboard(self):
+        self.issue()
+        self.issue(doc_type="CN", ref_no="X/1", ref_date="2026-10-12")
+        r = self.client.get(reverse("dashboard"))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context["report"]["totals"]["total"], 0)
+
+    def test_copy_estimate_to_tax_invoice(self):
+        est = self.issue(doc_type="EST")
+        r = self.client.get(reverse("invoice_new") + f"?copy={est.pk}&as=TAX")
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.context["init"]["invoice"]["doc_type"], "TAX")
+        self.assertTrue(r.context["init"]["invoice"]["notice"])
+
 
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):
