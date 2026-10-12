@@ -65,6 +65,8 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = "static/"
+# Uploaded files (firm logo and signature). They are shown through the app (login needed), not as public files.
+MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_URL = "login"

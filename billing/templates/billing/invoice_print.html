@@ -31,6 +31,8 @@
   .taxsum th, .taxsum td { font-size:11.5px; }
   .foot { display:grid; grid-template-columns:1.4fr 1fr; gap:14px; margin-top:12px; }
   .sign { text-align:right; margin-top:40px; }
+  .qrbox { width:96px; height:96px; flex:none; }
+  .qrbox svg { width:100%; height:100%; display:block; }
   @media print {
     @page { size: A4; margin: 10mm; }
     main { padding:0; max-width:none; }
@@ -46,6 +48,8 @@
   <a class="btn" href="{% url 'invoice_new' %}?copy={{ invoice.pk }}" title="Start a new bill with the same party and items">Copy</a>
   {% if invoice.invoice_no and not invoice.is_cancelled and invoice.doc_type == "TAX" %}<a class="btn" href="{% url 'invoice_new' %}?copy={{ invoice.pk }}&amp;as=CN">Credit note</a>{% endif %}
   {% if invoice.doc_type == "EST" or invoice.doc_type == "SUPPLY" %}<a class="btn" href="{% url 'invoice_new' %}?copy={{ invoice.pk }}&amp;as=TAX">Make tax invoice</a>{% endif %}
+  {% if share %}<a class="btn" href="{{ share.whatsapp }}" target="_blank" rel="noopener" title="Opens WhatsApp with a message. Save the bill as PDF and attach it.">WhatsApp</a>
+  <a class="btn" href="{{ share.email }}" title="Opens your mail app with a message. Save the bill as PDF and attach it.">Email</a>{% endif %}
   <a class="btn" href="{% url 'invoice_list' %}">All invoices</a>
   <span style="flex:1"></span>
   {% if invoice.is_cancelled %}
@@ -70,11 +74,14 @@
   <div class="draft-banner">CANCELLED on {{ invoice.cancelled_on|date:"d-m-Y" }}{% if invoice.cancel_reason %} &mdash; {{ invoice.cancel_reason }}{% endif %}. This {{ doc_title|lower }} is not valid.</div>{% endif %}
   {% if not invoice.invoice_no %}<div class="draft-banner">DRAFT &mdash; not submitted yet. It has no number yet and is not a valid {{ doc_title|lower }}.</div>{% endif %}
   <div class="head">
-    <div>
+    <div{% if firm.logo %} style="display:flex; gap:12px; align-items:flex-start"{% endif %}>
+      {% if firm.logo %}<img src="{% url 'firm_image' 'logo' %}" alt="" style="max-height:64px; max-width:130px; object-fit:contain">{% endif %}
+      <div>
       <h1>{{ firm.name }}</h1>
       <div class="pre">{{ firm.address }}</div>
       {% if firm.phone %}<div>Ph: {{ firm.phone }}</div>{% endif %}
       {% if firm.email %}<div>{{ firm.email }}</div>{% endif %}
+      </div>
     </div>
     <div style="text-align:right">
       {% if firm.gstin %}<div><b>GSTIN:</b> {{ firm.gstin }}</div>{% endif %}
@@ -190,12 +197,14 @@
   <div class="foot">
     <div>
       {% if firm.bank_details %}<div><b>Bank details</b></div><div class="pre">{{ firm.bank_details }}</div>{% endif %}
+      {% if upi_qr %}<div style="margin-top:8px; display:flex; gap:10px; align-items:center"><div class="qrbox">{{ upi_qr|safe }}</div><div style="font-size:11px"><b>Pay by UPI</b><br>Scan to pay &#8377; {{ invoice.total }}<br>{{ firm.upi_id }}</div></div>{% endif %}
       {% if invoice.notes %}<div style="margin-top:8px"><b>Notes</b></div><div class="pre">{{ invoice.notes }}</div>{% endif %}
       {% if firm.terms %}<div style="margin-top:8px"><b>Terms &amp; conditions</b></div><div class="pre">{{ firm.terms }}</div>{% endif %}
     </div>
     <div class="sign">
       For <b>{{ firm.name }}</b>
-      <div style="margin-top:42px">Authorised signatory</div>
+      {% if firm.signature %}<div style="margin-top:6px"><img src="{% url 'firm_image' 'signature' %}" alt="" style="max-height:60px; max-width:180px; object-fit:contain"></div><div>Authorised signatory</div>
+      {% else %}<div style="margin-top:42px">Authorised signatory</div>{% endif %}
     </div>
   </div>
 </div>

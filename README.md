@@ -91,6 +91,16 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - Invalid entries (quantity 0, a missing rate or amount, a GST rate outside the list, a duplicate invoice number) are rejected before saving.
 - The GSTIN checksum is verified (it shows a warning but does not block saving).
 
+## Logo, signature, UPI QR and sharing
+
+- Admin -> Firm -> *Print*: upload a **logo** and a **signature** (PNG or JPG, up to 1 MB each; they are stored in the `media/`
+  folder) and enter your **UPI ID** (for example `shopname@okaxis`). The logo prints at the top, the signature above
+  "Authorised signatory", and tax invoices / bills of supply get a **Pay by UPI** QR with the bill total. There is no QR on
+  drafts, cancelled bills, estimates and credit notes. The QR needs the `segno` package (`pip install -r requirements.txt`);
+  without it the bill simply prints without a QR.
+- On a numbered bill the **WhatsApp** and **Email** buttons open WhatsApp / your mail app with a ready message to the party's
+  phone or e-mail. Use *Print / save as PDF* first and attach the PDF yourself (the web cannot attach files automatically).
+
 ## GST reports and party statement
 
 *GST reports* (top menu) gives, for a financial year or one month, CSV files for your GST return / CA: **B2B** (invoices and

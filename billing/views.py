@@ -18,7 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlencode
 from django.views.decorators.http import require_POST
 
 from .calc import D, amount_in_words, compute_invoice, q2, rate_summary, split_gst
-from . import audit
+from . import audit, share
 from .gst_returns import b2b_rows, b2c_rows, hsn_rows, series_summary
 from .reports import MONTH_NAMES as MONTH_LABELS, build_report, fy_label, fy_months, fy_start_year
 from .models import DOC_TYPES, GST_DOC_TYPES, STATE_CODES, Firm, Invoice, InvoiceItem, Party, Product, doc_prefix
@@ -645,8 +645,47 @@ def invoice_print(request, pk):
             "doc_title": {"TAX": "Tax invoice", "SUPPLY": "Bill of supply", "EST": "Estimate", "CN": "Credit note"}[invoice.doc_type],
             "number_label": {"TAX": "Invoice no.", "SUPPLY": "Bill no.", "EST": "Estimate no.", "CN": "Credit note no."}[invoice.doc_type],
             "can_cancel": request.user.has_perm("billing.cancel_invoice"),
+            "upi_qr": _upi_qr(invoice, firm),
+            "share": _share_links(invoice, firm),
         },
     )
+
+
+def _upi_qr(invoice, firm):
+    """Payment QR (inline SVG) for bills that ask for money: not for drafts, cancelled bills, estimates or credit notes."""
+    if not firm.upi_id or not invoice.invoice_no or invoice.is_cancelled or invoice.doc_type not in ("TAX", "SUPPLY") or invoice.total <= 0:
+        return ""
+    return share.qr_svg(share.upi_uri(firm.upi_id, firm.name, invoice.total, invoice.invoice_no))
+
+
+def _share_links(invoice, firm):
+    """WhatsApp / e-mail links with a ready message. The PDF itself is attached by the person (Print -> Save as PDF)."""
+    if not invoice.invoice_no or invoice.is_cancelled:
+        return None
+    title = {"TAX": "Invoice", "SUPPLY": "Bill of supply", "EST": "Estimate", "CN": "Credit note"}[invoice.doc_type]
+    text = (f"Dear {invoice.party_name},\n{title} {invoice.invoice_no} dated {invoice.date:%d-%m-%Y} for Rs. {invoice.total} "
+            f"is attached.\nThank you,\n{firm.name}")
+    return {"whatsapp": share.whatsapp_url(invoice.party_phone, text),
+            "email": share.mailto_url(invoice.party_email, f"{title} {invoice.invoice_no} from {firm.name}", text)}
+
+
+@login_required
+def firm_image(request, kind):
+    """Shows the firm's logo or signature (only to logged-in users)."""
+    from django.http import FileResponse, Http404
+    if kind not in ("logo", "signature"):
+        raise Http404
+    field = getattr(Firm.get(), kind)
+    if not field:
+        raise Http404
+    try:
+        handle = field.open("rb")
+    except (FileNotFoundError, ValueError):
+        raise Http404
+    ctype = "image/png" if field.name.lower().endswith(".png") else "image/jpeg"
+    response = FileResponse(handle, content_type=ctype)
+    response["Cache-Control"] = "private, max-age=300"
+    return response
 
 
 def _report_for_year(request):

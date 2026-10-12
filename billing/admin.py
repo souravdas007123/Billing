@@ -13,6 +13,10 @@ from .models import STATE_CODES, AuditLog, Firm, Invoice, InvoiceItem, Party, Pr
 @admin.register(Firm)
 class FirmAdmin(admin.ModelAdmin):
     list_display = ("name", "gstin", "state", "invoice_prefix")
+    fieldsets = (
+        (None, {"fields": ("name", "address", "gstin", "state", "phone", "email", "invoice_prefix")}),
+        ("Print", {"fields": ("logo", "signature", "upi_id", "bank_details", "terms")}),
+    )
 
 
 @admin.register(Party)

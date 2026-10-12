@@ -486,6 +486,29 @@ class BillingViewTests(TestCase):
         self.assertEqual(len(self.client.get(reverse("invoice_list") + "?q=Party 07").context["invoices"]), 1)
         self.assertEqual(self.client.get(reverse("invoice_list") + "?from=junk&type=zzz&page=99").status_code, 200)
 
+    def test_share_links_and_upi_on_print_page(self):
+        Firm.objects.update(upi_id="shop@okaxis")
+        inv = self.issue(party_phone="9876543210", party_email="a@b.com")
+        r = self.client.get(reverse("invoice_print", args=[inv.pk]))
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("https://wa.me/919876543210?text=", r.context["share"]["whatsapp"])
+        self.assertTrue(r.context["share"]["email"].startswith("mailto:a%40b.com"))
+        draft = Invoice.objects.get(pk=self.save(payload(submitted=False)).json()["id"])
+        r = self.client.get(reverse("invoice_print", args=[draft.pk]))
+        self.assertIsNone(r.context["share"])
+        self.assertEqual(r.context["upi_qr"], "")  # no payment QR on a draft
+
+    def test_firm_image_needs_a_file(self):
+        self.assertEqual(self.client.get(reverse("firm_image", args=["logo"])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("firm_image", args=["other"])).status_code, 404)
+
+    def test_firm_upi_id_is_validated(self):
+        from django.core.exceptions import ValidationError
+        firm = Firm.objects.first()
+        firm.upi_id = "not a upi id"
+        with self.assertRaises(ValidationError):
+            firm.clean()
+
 
 class InvoiceNumberTests(TestCase):
     def test_series_increments_and_resets_each_financial_year(self):

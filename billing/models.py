@@ -46,6 +46,16 @@ def state_from_gstin(gstin):
     return CODE_TO_STATE.get(g[:2], "") if len(g) >= 2 else ""
 
 
+def image_check(f):
+    """Logo / signature: only PNG or JPG, at most 1 MB."""
+    from django.core.exceptions import ValidationError
+    name = (getattr(f, "name", "") or "").lower()
+    if not name.endswith((".png", ".jpg", ".jpeg")):
+        raise ValidationError("Upload a PNG or JPG image.")
+    if getattr(f, "size", 0) > 1024 * 1024:
+        raise ValidationError("The image is larger than 1 MB. Please use a smaller one.")
+
+
 class Firm(models.Model):
     """Your own company details (a single record). Fill it in from the admin site."""
 
@@ -58,9 +68,18 @@ class Firm(models.Model):
     bank_details = models.TextField(blank=True, help_text="Printed at the bottom of the invoice")
     terms = models.TextField(blank=True, help_text="Terms & conditions")
     invoice_prefix = models.CharField(max_length=20, default="INV")
+    logo = models.FileField(upload_to="firm/", blank=True, validators=[image_check], help_text="PNG or JPG, up to 1 MB. Printed at the top of the invoice.")
+    signature = models.FileField(upload_to="firm/", blank=True, validators=[image_check], help_text="PNG or JPG, up to 1 MB (a scan of the signature on white or transparent background).")
+    upi_id = models.CharField("UPI ID", max_length=80, blank=True, help_text="For example shopname@okaxis. A payment QR with the bill total is printed on bills.")
 
     class Meta:
         verbose_name = "Firm"
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        from .share import valid_upi_id
+        if self.upi_id and not valid_upi_id(self.upi_id):
+            raise ValidationError({"upi_id": "Enter a valid UPI ID such as shopname@okaxis."})
 
     def __str__(self):
         return self.name
