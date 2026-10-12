@@ -161,12 +161,6 @@ class BillingViewTests(TestCase):
         self.assertContains(self.client.get(reverse("invoice_edit", args=[inv_id])), "accounts@alpha.example")
 
 
-    def test_bill_is_submitted_by_default_and_can_be_left_pending(self):
-        self.save(payload())
-        self.assertIsNotNone(Invoice.objects.get(invoice_no="T-1").submitted_on)
-        self.save(payload(invoice_no="T-2", submitted=False))
-        self.assertIsNone(Invoice.objects.get(invoice_no="T-2").submitted_on)
-
     def test_editing_keeps_the_original_submitted_date(self):
         inv_id = self.save(payload()).json()["id"]
         original = Invoice.objects.get(pk=inv_id).submitted_on
@@ -175,30 +169,12 @@ class BillingViewTests(TestCase):
         self.assertEqual(Invoice.objects.get(pk=inv_id).submitted_on, datetime.date(2026, 9, 1))
         self.assertNotEqual(original, datetime.date(2026, 9, 1))
 
-    def test_mark_submitted_and_back_to_pending(self):
-        inv_id = self.save(payload(submitted=False)).json()["id"]
-        url = reverse("invoice_submit", args=[inv_id])
-        r = self.client.post(url, {"next": reverse("invoice_list")})
-        self.assertEqual(r.status_code, 302)
-        self.assertIsNotNone(Invoice.objects.get(pk=inv_id).submitted_on)
-        self.client.post(url, {"action": "unsubmit", "next": reverse("invoice_list")})
-        self.assertIsNone(Invoice.objects.get(pk=inv_id).submitted_on)
-
     def test_submit_requires_post_and_ignores_offsite_redirects(self):
         inv_id = self.save(payload(submitted=False)).json()["id"]
         url = reverse("invoice_submit", args=[inv_id])
         self.assertEqual(self.client.get(url).status_code, 405)
         r = self.client.post(url, {"next": "https://evil.example/"})
         self.assertEqual(r["Location"], reverse("invoice_list"))
-
-    def test_list_filters_by_status_and_shows_counts(self):
-        self.save(payload(invoice_no="T-1"))
-        self.save(payload(invoice_no="T-2", submitted=False))
-        r = self.client.get(reverse("invoice_list"), {"status": "pending"})
-        self.assertEqual([i.invoice_no for i in r.context["invoices"]], ["T-2"])
-        self.assertEqual(dict(r.context["counts"]), {"all": 2, "pending": 1, "submitted": 1})
-        r = self.client.get(reverse("invoice_list"), {"status": "submitted"})
-        self.assertEqual([i.invoice_no for i in r.context["invoices"]], ["T-1"])
 
     def test_check_number_reports_duplicates(self):
         inv_id = self.save(payload()).json()["id"]
@@ -212,6 +188,76 @@ class BillingViewTests(TestCase):
         self.save(payload(invoice_no="T-1"))
         self.save(payload(invoice_no="T-2"))
         self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"]["no"], "T-2")
+
+
+    def test_submitted_bill_gets_a_number_and_a_draft_does_not(self):
+        self.save(payload(invoice_no="T-1"))
+        self.assertIsNotNone(Invoice.objects.get(invoice_no="T-1").submitted_on)
+        r = self.save(payload(invoice_no="IGNORED-9", submitted=False))
+        self.assertEqual(r.status_code, 200, r.content)
+        draft = Invoice.objects.get(pk=r.json()["id"])
+        self.assertIsNone(draft.invoice_no)  # a typed number is ignored for a draft
+        self.assertIsNone(draft.submitted_on)
+
+    def test_drafts_do_not_use_up_numbers(self):
+        first = self.save(payload(invoice_no="")).json()["id"]
+        self.save(payload(party_name="Beta", submitted=False))
+        self.save(payload(party_name="Gamma", submitted=False))
+        second = self.save(payload(invoice_no="")).json()["id"]
+        self.assertEqual(Invoice.objects.get(pk=first).invoice_no, "INV/26-27/0001")
+        self.assertEqual(Invoice.objects.get(pk=second).invoice_no, "INV/26-27/0002")  # no gap
+
+    def test_submitting_a_draft_gives_it_the_next_number(self):
+        draft_id = self.save(payload(submitted=False)).json()["id"]
+        self.save(payload(invoice_no=""))  # INV/26-27/0001
+        url = reverse("invoice_submit", args=[draft_id])
+        r = self.client.post(url, {"next": reverse("invoice_list")})
+        self.assertEqual(r.status_code, 302)
+        draft = Invoice.objects.get(pk=draft_id)
+        self.assertEqual(draft.invoice_no, "INV/26-27/0002")
+        self.assertIsNotNone(draft.submitted_on)
+        self.assertGreaterEqual(draft.date, datetime.date(2026, 10, 12))  # a past date becomes the day of issue
+        self.client.post(url, {"next": reverse("invoice_list")})
+        self.assertEqual(Invoice.objects.get(pk=draft_id).invoice_no, "INV/26-27/0002")  # submitting twice changes nothing
+
+    def test_editing_a_draft_and_submitting_it_assigns_a_number(self):
+        draft_id = self.save(payload(submitted=False)).json()["id"]
+        r = self.save(payload(invoice_no="", submitted=True), reverse("invoice_update", args=[draft_id]))
+        self.assertEqual(r.status_code, 200, r.content)
+        self.assertEqual(Invoice.objects.get(pk=draft_id).invoice_no, "INV/26-27/0001")
+
+    def test_submitted_bill_cannot_go_back_to_draft(self):
+        inv_id = self.save(payload(invoice_no="T-1")).json()["id"]
+        r = self.save(payload(invoice_no="T-1", submitted=False), reverse("invoice_update", args=[inv_id]))
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(Invoice.objects.get(pk=inv_id).invoice_no, "T-1")
+
+    def test_submit_requires_post_and_ignores_offsite_redirects(self):
+        inv_id = self.save(payload(submitted=False)).json()["id"]
+        url = reverse("invoice_submit", args=[inv_id])
+        self.assertEqual(self.client.get(url).status_code, 405)
+        r = self.client.post(url, {"next": "https://evil.example/"})
+        self.assertEqual(r["Location"], reverse("invoice_list"))
+
+    def test_list_filters_by_status_and_shows_counts(self):
+        self.save(payload(invoice_no="T-1"))
+        draft_id = self.save(payload(submitted=False)).json()["id"]
+        r = self.client.get(reverse("invoice_list"), {"status": "pending"})
+        self.assertEqual([i.pk for i in r.context["invoices"]], [draft_id])
+        self.assertEqual(dict(r.context["counts"]), {"all": 2, "pending": 1, "submitted": 1})
+        r = self.client.get(reverse("invoice_list"), {"status": "submitted"})
+        self.assertEqual([i.invoice_no for i in r.context["invoices"]], ["T-1"])
+
+    def test_draft_print_page_shows_the_draft_banner(self):
+        draft_id = self.save(payload(submitted=False)).json()["id"]
+        self.assertContains(self.client.get(reverse("invoice_print", args=[draft_id])), "DRAFT")
+        issued_id = self.save(payload(invoice_no="T-5")).json()["id"]
+        self.assertNotContains(self.client.get(reverse("invoice_print", args=[issued_id])), "not a valid tax invoice")
+
+    def test_last_invoice_hint_ignores_drafts(self):
+        self.save(payload(invoice_no="T-1"))
+        self.save(payload(submitted=False))
+        self.assertEqual(self.client.get(reverse("invoice_new")).context["init"]["last_invoice"]["no"], "T-1")
 
 
 class InvoiceNumberTests(TestCase):

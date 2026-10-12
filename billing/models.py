@@ -98,7 +98,9 @@ def financial_year_label(d):
 
 
 class Invoice(models.Model):
-    invoice_no = models.CharField(max_length=40, unique=True)
+    # A bill that is not submitted yet is a draft and has no invoice number. The number is given when it is submitted,
+    # so the numbers in use always form an unbroken series.
+    invoice_no = models.CharField(max_length=40, unique=True, null=True, blank=True)
     date = models.DateField(default=timezone.localdate)
     party = models.ForeignKey(Party, null=True, blank=True, on_delete=models.SET_NULL)
 
@@ -131,11 +133,15 @@ class Invoice(models.Model):
         ordering = ["-date", "-id"]
 
     def __str__(self):
-        return f"{self.invoice_no} - {self.party_name}"
+        return f"{self.invoice_no or 'Draft'} - {self.party_name}"
 
     @property
     def is_pending(self):
         return self.submitted_on is None
+
+    @property
+    def is_draft(self):
+        return self.invoice_no is None
 
     @property
     def gst_total(self):

@@ -41,10 +41,12 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 - Totals, CGST / SGST / IGST, round-off and the amount in words update live.
 - **Invoice number**: under the field you can see the last invoice that was created, and as you type the app tells you
   whether the number is already used.
-- **Bills you will hand over later**: tick "Not submitted yet" before saving. The bill gets its number as usual but is
-  marked *Not submitted* in the invoice list. Use the **Not submitted** tab to see what is still waiting, and click
-  **Mark submitted** (in the list or on the print page) when the bill is handed over. Bills made before this feature
-  existed are treated as already submitted.
+- **Bills you will hand over later**: tick "Not submitted yet" before saving. A draft has **no invoice number**, so it
+  never uses up a number in the series (no gaps for GST). Use the **Not submitted** tab to see what is waiting and click
+  **Submit & get number** (in the list or on the print page): the bill gets the next number in the series, and its date
+  becomes today if it was in the past. A submitted bill cannot go back to a draft, and a draft can be edited freely or
+  deleted without touching the numbering. Bills numbered before this feature existed are treated as already submitted
+  (run `python manage.py migrate`).
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

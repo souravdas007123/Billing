@@ -96,10 +96,10 @@ def calc_api(request):
 def _clean_payload(data, firm):
     errors = []
 
-    invoice_no = (data.get("invoice_no") or "").strip()
-    if not invoice_no:
-        errors.append("Enter an invoice number.")
-    elif len(invoice_no) > 40:
+    submitted = data.get("submitted") is not False  # only an explicit false means "give it later"
+    # A bill that is not submitted yet gets no invoice number. For a submitted bill a blank number means "assign the next one".
+    invoice_no = (data.get("invoice_no") or "").strip() if submitted else ""
+    if len(invoice_no) > 40:
         errors.append("Invoice number must be 40 characters or fewer.")
 
     try:
@@ -211,7 +211,7 @@ def _clean_payload(data, firm):
         "party_state": party_state,
         "party_phone": (data.get("party_phone") or "").strip()[:40],
         "party_email": party_email,
-        "submitted": data.get("submitted") is not False,  # only an explicit false means "give it later"
+        "submitted": submitted,
         "place_of_supply": place,
         "price_mode": price_mode,
         "notes": (data.get("notes") or "").strip(),
@@ -244,54 +244,71 @@ def invoice_save(request, pk=None):
         return _err(errors)
 
     invoice = get_object_or_404(Invoice, pk=pk) if pk else None
-    dup = Invoice.objects.filter(invoice_no=c["invoice_no"])
-    if invoice:
-        dup = dup.exclude(pk=invoice.pk)
-    dup_msg = [f"Invoice number {c['invoice_no']} already exists. Enter a different number."]
-    if dup.exists():
-        return _err(dup_msg)
+    was_issued = invoice is not None and invoice.invoice_no is not None
+    if was_issued and not c["submitted"]:
+        return _err(["This bill has already been submitted and its invoice number is in use, so it cannot go back to \"not submitted\"."])
 
+    number = c["invoice_no"]
+    if was_issued and not number:
+        number = invoice.invoice_no  # a blank field on an existing invoice keeps its number
+    dup_msg = [f"Invoice number {number} already exists. Enter a different number."]
+    if number:
+        dup = Invoice.objects.filter(invoice_no=number)
+        if invoice:
+            dup = dup.exclude(pk=invoice.pk)
+        if dup.exists():
+            return _err(dup_msg)
+
+    # A submitted bill without a number (a new bill, or a draft being submitted) is given the next number in the series.
+    auto_number = c["submitted"] and not number
+    attempts = 3 if auto_number else 1
     r = c["result"]
-    try:
-        with transaction.atomic():
-            inv = invoice or Invoice()
-            inv.invoice_no = c["invoice_no"]
-            inv.date = c["date"]
-            inv.party = _resolve_party(c)
-            inv.party_name = c["party_name"]
-            inv.party_address = c["party_address"]
-            inv.party_gstin = c["party_gstin"]
-            inv.party_state = c["party_state"]
-            inv.party_phone = c["party_phone"]
-            inv.party_email = c["party_email"]
-            inv.place_of_supply = c["place_of_supply"]
-            inv.price_mode = c["price_mode"]
-            inv.is_intra_state = r["intra"]
-            inv.taxable_value = r["taxable"]
-            inv.cgst, inv.sgst, inv.igst = r["cgst"], r["sgst"], r["igst"]
-            inv.round_off = r["round_off"]
-            inv.total = r["total"]
-            inv.notes = c["notes"]
-            if not c["submitted"]:
-                inv.submitted_on = None
-            elif inv.submitted_on is None:
-                inv.submitted_on = timezone.localdate()
-            inv.save()
-            if invoice:
-                inv.items.all().delete()
-            InvoiceItem.objects.bulk_create(
-                [
-                    InvoiceItem(
-                        invoice=inv, sr=i, description=it["description"], hsn=it["hsn"], qty=it["qty"],
-                        unit=it["unit"], rate=it["rate"], discount_pct=it["discount_pct"],
-                        gst_rate=it["gst_rate"], taxable=line["taxable"], gst_amount=line["gst"],
-                        line_total=line["total"],
-                    )
-                    for i, (it, line) in enumerate(zip(c["items"], r["lines"]), start=1)
-                ]
-            )
-    except IntegrityError:
-        return _err(dup_msg)
+    for attempt in range(attempts):
+        try:
+            with transaction.atomic():
+                inv = invoice or Invoice()
+                if not c["submitted"]:
+                    inv.invoice_no = None
+                else:
+                    inv.invoice_no = number or Invoice.next_number(firm.invoice_prefix, c["date"])
+                inv.date = c["date"]
+                inv.party = _resolve_party(c)
+                inv.party_name = c["party_name"]
+                inv.party_address = c["party_address"]
+                inv.party_gstin = c["party_gstin"]
+                inv.party_state = c["party_state"]
+                inv.party_phone = c["party_phone"]
+                inv.party_email = c["party_email"]
+                inv.place_of_supply = c["place_of_supply"]
+                inv.price_mode = c["price_mode"]
+                inv.is_intra_state = r["intra"]
+                inv.taxable_value = r["taxable"]
+                inv.cgst, inv.sgst, inv.igst = r["cgst"], r["sgst"], r["igst"]
+                inv.round_off = r["round_off"]
+                inv.total = r["total"]
+                inv.notes = c["notes"]
+                if not c["submitted"]:
+                    inv.submitted_on = None
+                elif inv.submitted_on is None:
+                    inv.submitted_on = timezone.localdate()
+                inv.save()
+                if invoice:
+                    inv.items.all().delete()
+                InvoiceItem.objects.bulk_create(
+                    [
+                        InvoiceItem(
+                            invoice=inv, sr=i, description=it["description"], hsn=it["hsn"], qty=it["qty"],
+                            unit=it["unit"], rate=it["rate"], discount_pct=it["discount_pct"],
+                            gst_rate=it["gst_rate"], taxable=line["taxable"], gst_amount=line["gst"],
+                            line_total=line["total"],
+                        )
+                        for i, (it, line) in enumerate(zip(c["items"], r["lines"]), start=1)
+                    ]
+                )
+            break
+        except IntegrityError:
+            if attempt == attempts - 1:
+                return _err(["Could not assign an invoice number. Please try again."] if auto_number else dup_msg)
 
     return JsonResponse({"ok": True, "id": inv.pk, "print_url": reverse("invoice_print", args=[inv.pk])})
 
@@ -299,7 +316,7 @@ def invoice_save(request, pk=None):
 # ---------------- invoice number helpers ----------------
 def _last_invoice(current=None):
     """The most recently created invoice (other than the one being edited), for the hint under the number field."""
-    qs = Invoice.objects.order_by("-id")
+    qs = Invoice.objects.filter(invoice_no__isnull=False).order_by("-id")  # drafts have no number
     if current is not None:
         qs = qs.exclude(pk=current.pk)
     last = qs.first()
@@ -332,7 +349,7 @@ def invoice_form(request, pk=None):
 
     if invoice:
         inv = {
-            "invoice_no": invoice.invoice_no,
+            "invoice_no": invoice.invoice_no or "",
             "date": invoice.date.isoformat(),
             "price_mode": invoice.price_mode,
             "party_name": invoice.party_name,
@@ -343,7 +360,8 @@ def invoice_form(request, pk=None):
             "party_email": invoice.party_email,
             "place_of_supply": invoice.place_of_supply,
             "notes": invoice.notes,
-            "pending": invoice.is_pending,
+            "pending": invoice.is_draft,
+            "issued": not invoice.is_draft,
             "items": [
                 {"description": i.description, "hsn": i.hsn, "qty": _plain(i.qty), "unit": i.unit,
                  "rate": _plain(i.rate), "amount": _plain(i.line_total),
@@ -358,7 +376,7 @@ def invoice_form(request, pk=None):
             "date": today.isoformat(),
             "price_mode": "AMT",
             "party_name": "", "party_address": "", "party_gstin": "", "party_state": "",
-            "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "pending": False, "items": [],
+            "party_phone": "", "party_email": "", "place_of_supply": "", "notes": "", "pending": False, "issued": False, "items": [],
         }
 
     init = {
@@ -367,6 +385,8 @@ def invoice_form(request, pk=None):
         "new_url": reverse("invoice_new"),
         "check_url": reverse("check_number"),
         "invoice_id": invoice.pk if invoice else None,
+        "next_number": Invoice.next_number(firm.invoice_prefix, timezone.localdate()),
+        "today": timezone.localdate().isoformat(),
         "last_invoice": _last_invoice(invoice),
         "firm_state": firm.state,
         "state_codes": STATE_CODES,
@@ -407,13 +427,22 @@ def invoice_list(request):
 @login_required
 @require_POST
 def invoice_submit(request, pk):
-    """Mark a bill as handed over (or back to pending), from the list or the print page."""
+    """Submit a draft: it is given the next invoice number in the series and today's date (if its date is in the past)."""
     invoice = get_object_or_404(Invoice, pk=pk)
-    if request.POST.get("action") == "unsubmit":
-        invoice.submitted_on = None
-    elif invoice.submitted_on is None:
-        invoice.submitted_on = timezone.localdate()
-    invoice.save(update_fields=["submitted_on", "updated_at"])
+    if invoice.invoice_no is None:
+        firm = Firm.get()
+        today = timezone.localdate()
+        for attempt in range(3):
+            try:
+                with transaction.atomic():
+                    invoice.date = max(invoice.date, today)  # the invoice date is the day it is issued
+                    invoice.invoice_no = Invoice.next_number(firm.invoice_prefix, invoice.date)
+                    invoice.submitted_on = today
+                    invoice.save()
+                break
+            except IntegrityError:  # another bill took this number a moment ago: try the next one
+                invoice.invoice_no = None
+                invoice.submitted_on = None
     target = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}):
         target = reverse("invoice_list")

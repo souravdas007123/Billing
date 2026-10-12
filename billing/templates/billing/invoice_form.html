@@ -39,7 +39,7 @@
     <h3>{% if editing %}Edit invoice{% else %}Invoice details{% endif %}</h3>
     <label>Invoice number
       <input id="invoice_no" maxlength="40" autocomplete="off">
-      <span class="hint" style="display:block">Generated automatically. You can change it.</span>
+      <span class="hint" style="display:block">Given automatically when the bill is submitted. You can change it.</span>
       <span class="hint" id="last_invoice" style="display:block"></span>
       <span id="no_check" style="display:block;font-size:12px"></span>
     </label>
@@ -141,7 +141,7 @@
 </div>
 
 <div class="actions">
-  <label class="check"><input type="checkbox" id="pending"> Not submitted yet (I will hand this bill over later)</label>
+  <label class="check"><input type="checkbox" id="pending"> Not submitted yet (no invoice number until it is submitted)</label>
   <button type="button" id="save_new">Save &amp; new invoice</button>
   <button type="button" class="primary" id="save">Save &amp; print (Ctrl+S)</button>
 </div>
@@ -516,6 +516,32 @@
   }
   $('invoice_no').addEventListener('input', () => { clearTimeout(noTimer); noTimer = setTimeout(checkNumber, 300); });
 
+  // ---------- a bill that is not submitted yet has no invoice number ----------
+  let savedNo = '';
+  const wasDraft = !!INIT.invoice.pending;
+  function applyPending(initial) {
+    const pending = $('pending').checked;
+    const box = $('invoice_no');
+    if (pending) {
+      if (box.value.trim()) savedNo = box.value;
+      box.value = '';
+      box.disabled = true;
+      box.placeholder = 'Assigned when the bill is submitted';
+      $('no_check').className = 'hint';
+      $('no_check').textContent = 'A bill that is not submitted yet does not use an invoice number. It gets the next number when you submit it.';
+    } else {
+      box.disabled = false;
+      box.placeholder = '';
+      if (!box.value.trim()) box.value = savedNo || INIT.next_number;
+      if (!initial && wasDraft && $('date').value < INIT.today) $('date').value = INIT.today;  // the invoice date is the day it is issued
+      $('no_check').textContent = '';
+      if (!initial) checkNumber();
+    }
+    $('save').textContent = pending ? 'Save draft' : 'Save & print (Ctrl+S)';
+    $('save_new').textContent = pending ? 'Save draft & new' : 'Save & new invoice';
+  }
+  $('pending').addEventListener('change', () => applyPending(false));
+
   // ---------- save ----------
   function showErrors(list) {
     const box = $('msg');
@@ -564,6 +590,8 @@
   posManual = !!inv.place_of_supply && inv.place_of_supply !== inv.party_state;
   $('notes').value = inv.notes;
   $('pending').checked = !!inv.pending;
+  if (inv.issued) $('pending').closest('label').hidden = true;  // a numbered bill cannot go back to draft
+  applyPending(true);
   gstinHint();
   if (inv.items.length) inv.items.forEach(it => addRow(it)); else addRow();
   dirty = false;

@@ -42,7 +42,7 @@
     <tbody>
     {% for inv in invoices %}
       <tr>
-        <td><a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a></td>
+        <td>{% if inv.invoice_no %}<a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a>{% else %}<a href="{% url 'invoice_print' inv.pk %}" class="muted">No number yet</a>{% endif %}</td>
         <td>{{ inv.date|date:"d-m-Y" }}</td>
         <td>{{ inv.party_name }}</td>
         <td class="num">{{ inv.taxable_value|floatformat:2 }}</td>
@@ -52,7 +52,7 @@
         <td class="actions">
           <a href="{% url 'invoice_print' inv.pk %}">Print</a> &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a>
           {% if not inv.submitted_on %}&middot;
-          <form method="post" action="{% url 'invoice_submit' inv.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="link">Mark submitted</button></form>{% endif %}
+          <form method="post" action="{% url 'invoice_submit' inv.pk %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="link">Submit &amp; get number</button></form>{% endif %}
         </td>
       </tr>
     {% empty %}
