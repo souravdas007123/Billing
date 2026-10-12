@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Billing{% endblock %}</title>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#1d2330; --muted:#667085; --line:#d9dde5; --brand:#1f5eff; --brand-ink:#fff; --bad:#c0262d; --ok:#117a3d; --out:#f1f4fb; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--ink); }
+  header.top { background:#fff; border-bottom:1px solid var(--line); padding:0 16px; display:flex; align-items:center; gap:18px; height:48px; }
+  header.top a { color:var(--ink); text-decoration:none; font-weight:600; }
+  header.top a:hover { color:var(--brand); }
+  header.top .sp { flex:1; }
+  header.top form { margin:0; }
+  main { max-width:1280px; margin:0 auto; padding:16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:14px 16px; }
+  h2,h3 { margin:0 0 10px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:8px; }
+  input, select, textarea { width:100%; padding:7px 8px; border:1px solid var(--line); border-radius:6px; font:inherit; color:var(--ink); background:#fff; }
+  input:focus, select:focus, textarea:focus { outline:2px solid #b8ccff; border-color:var(--brand); }
+  button, .btn { display:inline-block; padding:8px 14px; border:1px solid var(--line); background:#fff; border-radius:6px; font:inherit; font-weight:600; cursor:pointer; color:var(--ink); text-decoration:none; }
+  button.primary, .btn.primary { background:var(--brand); border-color:var(--brand); color:var(--brand-ink); }
+  button:disabled { opacity:.6; cursor:wait; }
+  table { border-collapse:collapse; width:100%; }
+  th { text-align:left; font-size:12px; color:var(--muted); font-weight:600; padding:6px; border-bottom:1px solid var(--line); white-space:nowrap; }
+  td { padding:4px; border-bottom:1px solid #eef0f4; vertical-align:middle; }
+  .num { text-align:right; font-variant-numeric:tabular-nums; }
+  .muted { color:var(--muted); }
+  .msg { padding:10px 12px; border-radius:6px; margin-bottom:12px; background:#fdecec; color:var(--bad); border:1px solid #f5c2c4; }
+  .msg ul { margin:0; padding-left:18px; }
+  @media print { header.top { display:none; } body { background:#fff; } }
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="top">
+  <a href="{% url 'invoice_new' %}">+ Naya Bill</a>
+  <a href="{% url 'invoice_list' %}">Saare Bills</a>
+  <a href="{% url 'admin:index' %}">Party / Items / Firm (Admin)</a>
+  <span class="sp"></span>
+  <span class="muted">{{ user.get_username }}</span>
+  <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Logout</button></form>
+</header>
+{% endif %}
+<main>{% block content %}{% endblock %}</main>
+</body>
+</html>

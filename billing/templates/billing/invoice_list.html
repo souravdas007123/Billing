@@ -1,0 +1,35 @@
+{% extends "billing/base.html" %}
+{% block title %}Saare Bills{% endblock %}
+{% block content %}
+<div style="display:flex;gap:10px;align-items:center;margin-bottom:12px">
+  <h2 style="margin:0">Saare Bills</h2>
+  <span style="flex:1"></span>
+  <form method="get" style="display:flex;gap:6px;margin:0">
+    <input name="q" value="{{ q }}" placeholder="Invoice no / party / GSTIN" style="width:260px">
+    <button type="submit">Search</button>
+  </form>
+  <a class="btn primary" href="{% url 'invoice_new' %}">+ Naya Bill</a>
+</div>
+<div class="card">
+  <table>
+    <thead><tr><th>Invoice No</th><th>Date</th><th>Party</th><th class="num">Taxable</th><th class="num">GST</th><th class="num">Total</th><th></th></tr></thead>
+    <tbody>
+    {% for inv in invoices %}
+      <tr>
+        <td><a href="{% url 'invoice_print' inv.pk %}">{{ inv.invoice_no }}</a></td>
+        <td>{{ inv.date|date:"d-m-Y" }}</td>
+        <td>{{ inv.party_name }}</td>
+        <td class="num">{{ inv.taxable_value|floatformat:2 }}</td>
+        <td class="num">{{ inv.gst_total|floatformat:2 }}</td>
+        <td class="num"><b>{{ inv.total|floatformat:2 }}</b></td>
+        <td style="text-align:right;white-space:nowrap">
+          <a href="{% url 'invoice_print' inv.pk %}">Print</a> &middot; <a href="{% url 'invoice_edit' inv.pk %}">Edit</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted" style="padding:18px">Abhi koi bill nahi hai.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

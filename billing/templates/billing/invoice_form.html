@@ -1,0 +1,460 @@
+{% extends "billing/base.html" %}
+{% block title %}{% if editing %}Bill Edit{% else %}Naya Bill{% endif %}{% endblock %}
+{% block head %}
+<style>
+  .grid2 { display:grid; grid-template-columns: 1fr 2fr; gap:12px; margin-bottom:12px; }
+  .party-grid { display:grid; grid-template-columns: 1fr 1fr; gap:0 12px; }
+  .party-grid .full { grid-column: 1 / -1; }
+  .toolbar { display:flex; flex-wrap:wrap; gap:14px; align-items:end; margin-bottom:10px; }
+  .toolbar label { margin:0; }
+  .toolbar select { width:auto; min-width:150px; }
+  .hint { font-size:12px; color:var(--muted); }
+  .scroll { overflow-x:auto; }
+  #items input, #items select { padding:6px 6px; }
+  #items td.out { background:var(--out); padding:6px 8px; white-space:nowrap; min-width:84px; }
+  #items .x { padding:2px 8px; color:var(--bad); border-color:transparent; background:transparent; }
+  .bottom { display:grid; grid-template-columns: 1fr 380px; gap:12px; margin-top:12px; }
+  .tot td { padding:5px 4px; border:0; }
+  .tot tr.grand td { border-top:2px solid var(--ink); font-size:18px; font-weight:700; padding-top:8px; }
+  .words { font-size:12px; color:var(--muted); margin-top:6px; }
+  .warn { color:var(--bad); font-size:12px; }
+  .good { color:var(--ok); font-size:12px; }
+  .actions { display:flex; gap:10px; justify-content:flex-end; margin-top:12px; }
+  @media (max-width: 900px) { .grid2, .bottom { grid-template-columns: 1fr; } }
+</style>
+{% endblock %}
+{% block content %}
+{% csrf_token %}
+<div id="msg" class="msg" hidden></div>
+
+<div class="grid2">
+  <section class="card">
+    <h3>{% if editing %}Bill Edit{% else %}Bill Details{% endif %}</h3>
+    <label>Invoice No (auto, chahein to badlein)
+      <input id="invoice_no" maxlength="40">
+    </label>
+    <label>Date
+      <input id="date" type="date">
+    </label>
+    <label>Rate kaise hai?
+      <select id="price_mode">
+        <option value="EXCL">GST Excluding (GST upar se judega)</option>
+        <option value="INCL">GST Including (rate me GST shamil hai)</option>
+      </select>
+    </label>
+  </section>
+
+  <section class="card">
+    <h3>Party</h3>
+    <div class="party-grid">
+      <label class="full">Party ka naam (list me se chunein, ya naya likhein &mdash; naya party auto save ho jayega)
+        <input id="party_name" list="party_list" autocomplete="off" maxlength="200">
+      </label>
+      <datalist id="party_list"></datalist>
+      <label class="full">Address
+        <textarea id="party_address" rows="2"></textarea>
+      </label>
+      <label>GSTIN
+        <input id="party_gstin" maxlength="15" style="text-transform:uppercase">
+        <span id="gstin_hint" class="hint"></span>
+      </label>
+      <label>Phone
+        <input id="party_phone" maxlength="40">
+      </label>
+      <label>Party ka State
+        <select id="party_state"></select>
+      </label>
+      <label>Place of Supply
+        <select id="place_of_supply"></select>
+        <span id="gst_type" class="hint"></span>
+      </label>
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <h3>Items</h3>
+  <div class="toolbar">
+    <label>Sab items par GST rate
+      <select id="default_gst"></select>
+    </label>
+    <button type="button" id="apply_all">Sab lines par lagao</button>
+    <label>Excel se paste ka column order
+      <select id="paste_map">
+        <option value="description,qty,rate">Item | Qty | Rate</option>
+        <option value="description,hsn,qty,rate">Item | HSN | Qty | Rate</option>
+        <option value="description,qty,unit,rate">Item | Qty | Unit | Rate</option>
+        <option value="description,qty,rate,gst_rate">Item | Qty | Rate | GST%</option>
+        <option value="description,hsn,qty,unit,rate,gst_rate">Item | HSN | Qty | Unit | Rate | GST%</option>
+      </select>
+    </label>
+    <span class="hint">Excel me rows copy karke yahan kahin bhi Ctrl+V karein &mdash; saari lines ek saath bhar jayengi.</span>
+  </div>
+  <div class="scroll">
+    <datalist id="product_list"></datalist>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Item / Description</th><th>HSN</th><th class="num">Qty</th><th>Unit</th>
+          <th class="num">Rate</th><th class="num">Disc %</th><th>GST %</th>
+          <th class="num">Taxable</th><th class="num">GST</th><th class="num">Amount</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="items"></tbody>
+    </table>
+  </div>
+  <div style="margin-top:8px"><button type="button" id="add_row">+ Line jodein</button>
+    <span class="hint">&nbsp;Enter dabane par agli line me same column par jaate hain.</span></div>
+</section>
+
+<div class="bottom">
+  <section class="card">
+    <label>Notes / Remarks (bill par dikhega)
+      <textarea id="notes" rows="4"></textarea>
+    </label>
+  </section>
+  <section class="card">
+    <table class="tot">
+      <tr><td>Taxable Value</td><td class="num" id="t_taxable">0.00</td></tr>
+      <tr id="row_cgst"><td>CGST</td><td class="num" id="t_cgst">0.00</td></tr>
+      <tr id="row_sgst"><td>SGST</td><td class="num" id="t_sgst">0.00</td></tr>
+      <tr id="row_igst" hidden><td>IGST</td><td class="num" id="t_igst">0.00</td></tr>
+      <tr><td>Round off</td><td class="num" id="t_round">0.00</td></tr>
+      <tr class="grand"><td>Total</td><td class="num" id="t_total">0.00</td></tr>
+    </table>
+    <div class="words" id="t_words"></div>
+    <div id="calc_status" class="warn"></div>
+  </section>
+</div>
+
+<div class="actions">
+  <button type="button" id="save_new">Save &amp; Naya Bill</button>
+  <button type="button" class="primary" id="save">Save &amp; Print (Ctrl+S)</button>
+</div>
+
+{{ init|json_script:"init-data" }}
+<script>
+(function () {
+  const INIT = JSON.parse(document.getElementById('init-data').textContent);
+  const CSRF = document.querySelector('[name=csrfmiddlewaretoken]').value;
+  const $ = id => document.getElementById(id);
+  const FIELDS = ['description', 'hsn', 'qty', 'unit', 'rate', 'discount_pct', 'gst_rate'];
+  const tbody = $('items');
+  const STATES = Object.keys(INIT.state_codes);
+  const CODE_TO_STATE = {};
+  STATES.forEach(s => { CODE_TO_STATE[INIT.state_codes[s]] = s; });
+  const rateSet = new Set(INIT.gst_rates.map(Number));
+  const fmt = s => Number(s).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cleanNum = s => String(s == null ? '' : s).replace(/[₹,%\s]|Rs\.?/gi, '');
+
+  let posManual = false;
+  let dirty = false;
+  let goNew = false;
+
+  // ---------- dropdowns ----------
+  function fillStateSelect(sel) {
+    sel.innerHTML = '';
+    sel.add(new Option('— chunein —', ''));
+    STATES.forEach(s => sel.add(new Option(s, s)));
+  }
+  fillStateSelect($('party_state'));
+  fillStateSelect($('place_of_supply'));
+  INIT.gst_rates.forEach(r => $('default_gst').add(new Option(r + '%', r)));
+  $('default_gst').value = INIT.default_gst;
+  INIT.parties.forEach(p => { const o = document.createElement('option'); o.value = p.name; $('party_list').appendChild(o); });
+  INIT.products.forEach(p => { const o = document.createElement('option'); o.value = p.name; $('product_list').appendChild(o); });
+  const rateOptions = INIT.gst_rates.map(r => '<option value="' + r + '">' + r + '%</option>').join('');
+
+  try { const saved = localStorage.getItem('paste_map'); if (saved) $('paste_map').value = saved; } catch (e) {}
+  $('paste_map').addEventListener('change', () => { try { localStorage.setItem('paste_map', $('paste_map').value); } catch (e) {} });
+
+  // ---------- row helpers ----------
+  const get = (tr, f) => tr.querySelector('[data-f="' + f + '"]').value;
+  function set(tr, f, v) {
+    const el = tr.querySelector('[data-f="' + f + '"]');
+    if (f === 'gst_rate' && v !== '' && ![...el.options].some(o => o.value === String(v))) el.add(new Option(v + '%', v));
+    el.value = v == null ? '' : v;
+  }
+  const rowIsEmpty = tr => !get(tr, 'description').trim() && !get(tr, 'qty').trim() && !get(tr, 'rate').trim();
+  const allRows = () => [...tbody.rows];
+  function renumber() { allRows().forEach((tr, i) => { tr.querySelector('.sr').textContent = i + 1; }); }
+
+  function addRow(v, afterTr) {
+    v = v || {};
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td class="sr muted"></td>' +
+      '<td><input data-f="description" list="product_list" autocomplete="off" maxlength="300" style="min-width:240px"></td>' +
+      '<td><input data-f="hsn" maxlength="12" style="width:84px"></td>' +
+      '<td><input data-f="qty" inputmode="decimal" class="num" style="width:76px"></td>' +
+      '<td><input data-f="unit" maxlength="20" style="width:64px"></td>' +
+      '<td><input data-f="rate" inputmode="decimal" class="num" style="width:96px"></td>' +
+      '<td><input data-f="discount_pct" inputmode="decimal" class="num" style="width:64px"></td>' +
+      '<td><select data-f="gst_rate" style="width:84px">' + rateOptions + '</select></td>' +
+      '<td class="num out" data-o="taxable">0.00</td>' +
+      '<td class="num out" data-o="gst">0.00</td>' +
+      '<td class="num out" data-o="total">0.00</td>' +
+      '<td><button type="button" class="x" tabindex="-1" title="Line hataein">&#10005;</button></td>';
+    tbody.insertBefore(tr, afterTr ? afterTr.nextSibling : null);
+    set(tr, 'description', v.description);
+    set(tr, 'hsn', v.hsn);
+    set(tr, 'qty', v.qty);
+    set(tr, 'unit', v.unit == null ? 'Nos' : v.unit);
+    set(tr, 'rate', v.rate);
+    set(tr, 'discount_pct', v.discount_pct && v.discount_pct !== '0' ? v.discount_pct : '');
+    if (v.gst_rate != null && v.gst_rate !== '') { set(tr, 'gst_rate', v.gst_rate); tr.dataset.manualGst = '1'; }
+    else set(tr, 'gst_rate', $('default_gst').value);
+    renumber();
+    return tr;
+  }
+
+  function autofill(tr, provided) {
+    const name = get(tr, 'description').trim().toLowerCase();
+    if (!name) return;
+    const p = INIT.products.find(x => x.name.toLowerCase() === name);
+    if (!p) return;
+    if (!provided.has('hsn') && !get(tr, 'hsn')) set(tr, 'hsn', p.hsn);
+    if (!provided.has('unit')) set(tr, 'unit', p.unit || 'Nos');
+    if (!provided.has('rate') && !get(tr, 'rate')) set(tr, 'rate', p.rate === '0' ? '' : p.rate);
+    if (!provided.has('gst_rate') && !tr.dataset.manualGst) { set(tr, 'gst_rate', p.gst_rate); tr.dataset.manualGst = '1'; }
+  }
+
+  // ---------- events on item rows ----------
+  tbody.addEventListener('input', () => scheduleCalc());
+  tbody.addEventListener('change', e => {
+    const f = e.target.dataset.f;
+    const tr = e.target.closest('tr');
+    if (f === 'gst_rate') tr.dataset.manualGst = '1';
+    if (f === 'description') autofill(tr, new Set());
+    scheduleCalc();
+  });
+  tbody.addEventListener('click', e => {
+    if (!e.target.classList.contains('x')) return;
+    e.target.closest('tr').remove();
+    if (!tbody.rows.length) addRow();
+    renumber(); dirty = true; scheduleCalc();
+  });
+  tbody.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    const f = e.target.dataset.f;
+    const tr = e.target.closest('tr');
+    const next = tr.nextElementSibling || addRow();
+    const el = next.querySelector('[data-f="' + f + '"]');
+    el.focus(); if (el.select) el.select();
+  });
+
+  // ---------- paste from Excel ----------
+  function pasteRows(text, startTr) {
+    const map = $('paste_map').value.split(',');
+    let lines = text.replace(/\r/g, '').split('\n').filter(l => l.trim() !== '');
+    if (!lines.length) return;
+    const isNum = s => { s = cleanNum(s); return s !== '' && isFinite(Number(s)); };
+    const qi = map.indexOf('qty'), ri = map.indexOf('rate');
+    const head = lines[0].split('\t');
+    if (qi >= 0 && ri >= 0 && !isNum(head[qi] || '') && !isNum(head[ri] || '')) lines.shift();  // header row chhod do
+    if (!lines.length) return;
+
+    let tr = null;
+    if (startTr && rowIsEmpty(startTr)) tr = startTr;
+    else { const last = tbody.lastElementChild; tr = (last && rowIsEmpty(last)) ? last : addRow(); }
+
+    const provided = new Set(map);
+    lines.forEach((line, idx) => {
+      if (idx > 0) { const nx = tr.nextElementSibling; tr = (nx && rowIsEmpty(nx)) ? nx : addRow({}, tr); }
+      const cells = line.split('\t');
+      map.forEach((f, i) => {
+        const s = (cells[i] || '').trim();
+        if (f === 'description' || f === 'hsn' || f === 'unit') { if (s || f === 'description') set(tr, f, s); }
+        else if (f === 'gst_rate') {
+          const n = cleanNum(s);
+          if (n !== '' && rateSet.has(Number(n))) { set(tr, 'gst_rate', String(Number(n))); tr.dataset.manualGst = '1'; }
+        } else set(tr, f, cleanNum(s));
+      });
+      autofill(tr, provided);
+    });
+    dirty = true;
+    renumber();
+    scheduleCalc();
+  }
+  tbody.addEventListener('paste', e => {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (!/[\t\n]/.test(text.replace(/\s+$/, ''))) return;  // ek hi cell ho to normal paste
+    e.preventDefault();
+    pasteRows(text, e.target.closest('tr'));
+  });
+  document.addEventListener('paste', e => {  // page par kahin bhi (kisi field me nahi) Ctrl+V
+    if (e.defaultPrevented || e.target.closest('input, textarea, select')) return;
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    if (text.trim()) { e.preventDefault(); pasteRows(text, null); }
+  });
+
+  // ---------- default GST ----------
+  $('default_gst').addEventListener('change', () => {
+    allRows().forEach(tr => { if (!tr.dataset.manualGst) set(tr, 'gst_rate', $('default_gst').value); });
+    scheduleCalc();
+  });
+  $('apply_all').addEventListener('click', () => {
+    allRows().forEach(tr => { set(tr, 'gst_rate', $('default_gst').value); delete tr.dataset.manualGst; });
+    dirty = true; scheduleCalc();
+  });
+  $('add_row').addEventListener('click', () => { const tr = addRow(); tr.querySelector('[data-f="description"]').focus(); });
+
+  // ---------- party ----------
+  const partyByName = n => INIT.parties.find(p => p.name.toLowerCase() === n.trim().toLowerCase());
+  $('party_name').addEventListener('input', () => {
+    const p = partyByName($('party_name').value);
+    if (!p) return;
+    $('party_address').value = p.address || '';
+    $('party_gstin').value = p.gstin || '';
+    $('party_state').value = p.state || '';
+    $('party_phone').value = p.phone || '';
+    posManual = false;
+    $('place_of_supply').value = p.state || '';
+    gstinHint();
+    scheduleCalc();
+  });
+  $('party_state').addEventListener('change', () => {
+    if (!posManual) $('place_of_supply').value = $('party_state').value;
+    scheduleCalc();
+  });
+  $('place_of_supply').addEventListener('change', () => { posManual = true; scheduleCalc(); });
+  $('price_mode').addEventListener('change', scheduleCalc);
+
+  const GC = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  function gstinOk(g) {
+    if (g.length !== 15 || [...g].some(c => GC.indexOf(c) < 0)) return false;
+    let t = 0;
+    for (let i = 0; i < 14; i++) { const p = GC.indexOf(g[i]) * (i % 2 ? 2 : 1); t += Math.floor(p / 36) + (p % 36); }
+    return GC[(36 - (t % 36)) % 36] === g[14];
+  }
+  function gstinHint() {
+    const g = $('party_gstin').value.trim().toUpperCase();
+    const h = $('gstin_hint');
+    if (!g) { h.textContent = ''; h.className = 'hint'; return; }
+    if (g.length < 15) { h.textContent = g.length + '/15'; h.className = 'hint'; return; }
+    if (gstinOk(g)) { h.textContent = 'GSTIN sahi lag raha hai'; h.className = 'good'; }
+    else { h.textContent = 'GSTIN galat lag raha hai, check karein'; h.className = 'warn'; }
+  }
+  $('party_gstin').addEventListener('input', () => {
+    const el = $('party_gstin');
+    el.value = el.value.toUpperCase();
+    gstinHint();
+    const st = CODE_TO_STATE[el.value.slice(0, 2)];
+    if (st && !$('party_state').value) {
+      $('party_state').value = st;
+      if (!posManual) $('place_of_supply').value = st;
+      scheduleCalc();
+    }
+  });
+
+  // ---------- calculation (server hi final hisaab karta hai) ----------
+  let calcTimer = null, calcSeq = 0;
+  function scheduleCalc() { clearTimeout(calcTimer); calcTimer = setTimeout(calc, 180); }
+  const effectivePlace = () => $('place_of_supply').value || $('party_state').value;
+
+  function collect() {
+    return {
+      invoice_no: $('invoice_no').value,
+      date: $('date').value,
+      price_mode: $('price_mode').value,
+      party_name: $('party_name').value,
+      party_address: $('party_address').value,
+      party_gstin: $('party_gstin').value,
+      party_state: $('party_state').value,
+      party_phone: $('party_phone').value,
+      place_of_supply: effectivePlace(),
+      notes: $('notes').value,
+      items: allRows().map(tr => { const o = {}; FIELDS.forEach(f => { o[f] = get(tr, f); }); return o; }),
+    };
+  }
+  const post = (url, body) => fetch(url, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF }, body: JSON.stringify(body),
+  });
+
+  async function calc() {
+    const seq = ++calcSeq;
+    const d = collect();
+    try {
+      const r = await post(INIT.calc_url, { price_mode: d.price_mode, place_of_supply: d.place_of_supply, items: d.items });
+      const j = await r.json();
+      if (seq !== calcSeq) return;
+      if (!j.ok) { $('calc_status').textContent = (j.errors || ['Calculation nahi ho paya']).join(' '); return; }
+      $('calc_status').textContent = '';
+      render(j);
+    } catch (e) {
+      if (seq === calcSeq) $('calc_status').textContent = 'Server se connection nahi ho raha.';
+    }
+  }
+  function render(j) {
+    allRows().forEach((tr, i) => {
+      const l = j.lines[i]; if (!l) return;
+      tr.querySelector('[data-o="taxable"]').textContent = fmt(l.taxable);
+      tr.querySelector('[data-o="gst"]').textContent = fmt(l.gst);
+      tr.querySelector('[data-o="total"]').textContent = fmt(l.total);
+    });
+    $('t_taxable').textContent = fmt(j.taxable);
+    $('t_cgst').textContent = fmt(j.cgst);
+    $('t_sgst').textContent = fmt(j.sgst);
+    $('t_igst').textContent = fmt(j.igst);
+    $('t_round').textContent = (Number(j.round_off) > 0 ? '+' : '') + fmt(j.round_off);
+    $('t_total').textContent = fmt(j.total);
+    $('t_words').textContent = Number(j.total) > 0 ? j.words : '';
+    $('row_cgst').hidden = $('row_sgst').hidden = !j.intra;
+    $('row_igst').hidden = j.intra;
+    $('gst_type').textContent = j.intra ? 'Same state: CGST + SGST lagega' : 'Doosra state: IGST lagega';
+  }
+
+  // ---------- save ----------
+  function showErrors(list) {
+    const box = $('msg');
+    box.innerHTML = '';
+    const ul = document.createElement('ul');
+    list.forEach(t => { const li = document.createElement('li'); li.textContent = t; ul.appendChild(li); });
+    box.appendChild(ul);
+    box.hidden = false;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+  async function save(thenNew) {
+    goNew = thenNew;
+    $('msg').hidden = true;
+    $('save').disabled = $('save_new').disabled = true;
+    try {
+      const r = await post(INIT.save_url, collect());
+      const j = await r.json();
+      if (j.ok) { dirty = false; window.location.href = goNew ? INIT.new_url : j.print_url; return; }
+      showErrors(j.errors || ['Save nahi ho paya.']);
+    } catch (e) {
+      showErrors(['Server se connection nahi ho paya. Dobara try karein.']);
+    }
+    $('save').disabled = $('save_new').disabled = false;
+  }
+  $('save').addEventListener('click', () => save(false));
+  $('save_new').addEventListener('click', () => save(true));
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(false); }
+  });
+  document.addEventListener('input', () => { dirty = true; });
+  window.addEventListener('beforeunload', e => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  // ---------- initial values ----------
+  const inv = INIT.invoice;
+  $('invoice_no').value = inv.invoice_no;
+  $('date').value = inv.date;
+  $('price_mode').value = inv.price_mode;
+  $('party_name').value = inv.party_name;
+  $('party_address').value = inv.party_address;
+  $('party_gstin').value = inv.party_gstin;
+  $('party_state').value = inv.party_state;
+  $('party_phone').value = inv.party_phone;
+  $('place_of_supply').value = inv.place_of_supply;
+  posManual = !!inv.place_of_supply && inv.place_of_supply !== inv.party_state;
+  $('notes').value = inv.notes;
+  gstinHint();
+  if (inv.items.length) inv.items.forEach(it => addRow(it)); else addRow();
+  dirty = false;
+  calc();
+  (inv.party_name ? tbody.querySelector('[data-f="description"]') : $('party_name')).focus();
+})();
+</script>
+{% endblock %}
