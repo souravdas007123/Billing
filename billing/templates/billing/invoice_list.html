@@ -28,8 +28,6 @@
 {% block content %}
 <div class="list-head">
   <h2>All invoices</h2>
-  <span style="flex:1"></span>
-  <a class="btn primary" href="{% url 'invoice_new' %}">New invoice</a>
 </div>
 <form method="get" class="filters">
   {% if status %}<input type="hidden" name="status" value="{{ status }}">{% endif %}

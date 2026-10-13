@@ -95,7 +95,7 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
 
 - Admin -> Firm -> *Print*: upload a **logo**, a company **stamp** and a **signature** (PNG or JPG, up to 1 MB each; they are stored in the `media/`
   folder) and enter your **UPI ID** (for example `shopname@okaxis`). The logo prints at the top, the signature above
-  "Authorised signatory", and the stamp is centred at the bottom of the bill, and tax invoices / bills of supply get a **Pay by UPI** QR with the bill total. There is no QR on
+  "Authorised signatory", and the stamp sits exactly in the middle between the bank details and the signature, and tax invoices / bills of supply get a **Pay by UPI** QR with the bill total. There is no QR on
   drafts, cancelled bills, estimates and credit notes. The QR needs the `segno` package (`pip install -r requirements.txt`);
   without it the bill simply prints without a QR.
 - On a numbered bill the **WhatsApp** and **Email** buttons open WhatsApp / your mail app with a ready message to the party's
