@@ -77,6 +77,10 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
   each line before saving.
 - **All invoices** can be filtered by text, document type and date range (the filters stay when you switch tabs or pages),
   and is shown 50 bills per page.
+- **Long bills**: when the items do not fit on one page, the rest continues on the next page. The column headings repeat on
+  every page, a row is never cut in half, the totals / bank details / signature stay together on the last page, and each
+  page is numbered "Page 1 of 3" at the bottom. Use Chrome or Edge to print or save as PDF (older browsers may not show
+  the page numbers).
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated
