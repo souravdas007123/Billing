@@ -500,6 +500,7 @@ class BillingViewTests(TestCase):
 
     def test_firm_image_needs_a_file(self):
         self.assertEqual(self.client.get(reverse("firm_image", args=["logo"])).status_code, 404)
+        self.assertEqual(self.client.get(reverse("firm_image", args=["stamp"])).status_code, 404)
         self.assertEqual(self.client.get(reverse("firm_image", args=["other"])).status_code, 404)
 
     def test_firm_upi_id_is_validated(self):

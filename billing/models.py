@@ -70,6 +70,7 @@ class Firm(models.Model):
     invoice_prefix = models.CharField(max_length=20, default="INV")
     logo = models.FileField(upload_to="firm/", blank=True, validators=[image_check], help_text="PNG or JPG, up to 1 MB. Printed at the top of the invoice.")
     signature = models.FileField(upload_to="firm/", blank=True, validators=[image_check], help_text="PNG or JPG, up to 1 MB (a scan of the signature on white or transparent background).")
+    stamp = models.FileField(upload_to="firm/", blank=True, validators=[image_check], help_text="PNG or JPG, up to 1 MB (company stamp / seal; a PNG with a transparent background looks best). Printed next to the signature.")
     upi_id = models.CharField("UPI ID", max_length=80, blank=True, help_text="For example shopname@okaxis. A payment QR with the bill total is printed on bills.")
 
     class Meta:

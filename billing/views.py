@@ -673,7 +673,7 @@ def _share_links(invoice, firm):
 def firm_image(request, kind):
     """Shows the firm's logo or signature (only to logged-in users)."""
     from django.http import FileResponse, Http404
-    if kind not in ("logo", "signature"):
+    if kind not in ("logo", "signature", "stamp"):
         raise Http404
     field = getattr(Firm.get(), kind)
     if not field:

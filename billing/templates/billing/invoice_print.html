@@ -203,7 +203,10 @@
     </div>
     <div class="sign">
       For <b>{{ firm.name }}</b>
-      {% if firm.signature %}<div style="margin-top:6px"><img src="{% url 'firm_image' 'signature' %}" alt="" style="max-height:60px; max-width:180px; object-fit:contain"></div><div>Authorised signatory</div>
+      {% if firm.signature or firm.stamp %}<div style="margin-top:6px; display:flex; gap:14px; justify-content:flex-end; align-items:center">
+        {% if firm.stamp %}<img src="{% url 'firm_image' 'stamp' %}" alt="" style="max-height:80px; max-width:110px; object-fit:contain">{% endif %}
+        {% if firm.signature %}<img src="{% url 'firm_image' 'signature' %}" alt="" style="max-height:60px; max-width:160px; object-fit:contain">{% endif %}
+      </div><div>Authorised signatory</div>
       {% else %}<div style="margin-top:42px">Authorised signatory</div>{% endif %}
     </div>
   </div>
