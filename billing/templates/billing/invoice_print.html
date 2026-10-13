@@ -123,7 +123,7 @@
   <table class="lines">
     <thead>
       <tr>
-        <th rowspan="2" style="width:24px">#</th><th rowspan="2">Description</th><th rowspan="2">HSN</th><th rowspan="2">Qty</th><th rowspan="2">Rate</th>
+        <th rowspan="2" style="width:24px">#</th><th rowspan="2">Description</th><th rowspan="2">HSN/SAC</th><th rowspan="2">Qty</th><th rowspan="2">Rate</th>
         <th rowspan="2">Disc.</th><th rowspan="2">Taxable value</th>
         {% if invoice.is_intra_state %}<th colspan="2">CGST</th><th colspan="2">SGST</th>{% else %}<th colspan="2">IGST</th>{% endif %}
         <th rowspan="2">Amount</th>
@@ -157,7 +157,7 @@
   {% else %}
   <table class="lines">
     <thead>
-      <tr><th style="width:24px">#</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr>
+      <tr><th style="width:24px">#</th><th>Description</th><th>HSN/SAC</th><th>Qty</th><th>Rate</th><th>Discount</th><th>Amount</th></tr>
     </thead>
     <tbody>
     {% for it in items %}

@@ -81,6 +81,7 @@ and open `http://<this computer's IP address>:8000/` on the other machines.
   every page, a row is never cut in half, the totals / bank details / signature stay together on the last page, and each
   page is numbered "Page 1 of 3" at the bottom. Use Chrome or Edge to print or save as PDF (older browsers may not show
   the page numbers).
+- **Services**: use the same Tax invoice. Type the service in the item name, put its **SAC code** (for example 998313 for IT consulting; it starts with 99) in the HSN/SAC column, choose a unit such as *Job* or *Hrs*, and set the GST rate (18% for most services). Everything else works the same, including CGST + SGST / IGST by place of supply. Goods and services can be mixed on one bill.
 - **Ctrl+S** saves and opens the print page, where you can print or save a PDF.
 
 ## How the numbers are calculated

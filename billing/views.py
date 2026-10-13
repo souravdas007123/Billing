@@ -817,7 +817,7 @@ def gst_export(request, kind):
         return _csv_response(f"GSTR1-B2C-{tag}", ["Place of supply", "GST rate %", "Taxable value (net of credit notes)", "IGST", "CGST", "SGST"], rows)
     if kind == "hsn":
         rows = [[r["hsn"], r["unit"], r["qty"], r["rate"], r["value"], r["taxable"], r["igst"], r["cgst"], r["sgst"]] for r in hsn_rows(invoices, items)]
-        return _csv_response(f"GSTR1-HSN-{tag}", ["HSN", "Unit", "Quantity", "GST rate %", "Total value", "Taxable value", "IGST", "CGST", "SGST"], rows)
+        return _csv_response(f"GSTR1-HSN-{tag}", ["HSN/SAC", "Unit", "Quantity", "GST rate %", "Total value", "Taxable value", "IGST", "CGST", "SGST"], rows)
     if kind == "series":
         docs = Invoice.objects.filter(invoice_no__isnull=False, date__gte=datetime.date(start, 4, 1),
                                       date__lte=datetime.date(start + 1, 3, 31)).values("invoice_no", "doc_type", "status")
